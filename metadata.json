@@ -1,0 +1,6 @@
+{
+  "name": "Deutschland Regional Explorer",
+  "description": "Entdecke und plane Reisen durch ganz Deutschland mit dem Deutschlandticket und Regionalzügen.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

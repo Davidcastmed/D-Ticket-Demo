@@ -1,0 +1,342 @@
+<div class="min-h-screen bg-[#FAF7F2] flex flex-col font-sans text-[#2E1F18] selection:bg-[#2D6A4F] selection:text-white">
+  
+  <!-- Minimal, Clean Navigation Header (DB & hvv inspired minimalist space efficiency) -->
+  <header class="sticky top-0 z-40 bg-[#FAF7F2]/95 backdrop-blur-md border-b border-[#E6DED6]">
+    <div class="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-13 sm:h-14">
+        
+        <!-- Left Section: Brand Badge + Fixed Verbindungen & Abfahrten Buttons -->
+        <div class="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+          <!-- Minimal Brand Icon -->
+          <div class="flex items-center gap-2 text-[#1F1612] shrink-0" aria-label="Deutschlandticket Explorer Logo">
+            <span class="w-8 h-8 rounded-lg bg-[#1B4332] text-white flex items-center justify-center shadow-2xs" aria-hidden="true">
+              <span class="mat-icon text-base text-[#B7E4C7]">train</span>
+            </span>
+            <span class="hidden md:inline text-xs font-black tracking-tight text-[#1F1612]">D-Ticket</span>
+          </div>
+
+          <!-- Fixed, Non-scrolling Primary Navigation (Verbindungen & Abfahrten) -->
+          <nav class="flex items-center gap-1.5 sm:gap-2.5 shrink-0" role="navigation" aria-label="Hauptnavigation">
+            <!-- 1. Verbindungen -->
+            <button
+              type="button"
+              id="nav-tab-planner"
+              (click)="setTab('planner')"
+              role="tab"
+              [attr.aria-selected]="currentTab() === 'planner'"
+              [attr.aria-current]="currentTab() === 'planner' ? 'page' : null"
+              aria-label="Reiseplaner und Verbindungen"
+              [class.bg-[#1B4332]]="currentTab() === 'planner'"
+              [class.text-white]="currentTab() === 'planner'"
+              [class.shadow-2xs]="currentTab() === 'planner'"
+              [class.border-[#1B4332]]="currentTab() === 'planner'"
+              [class.bg-white]="currentTab() !== 'planner'"
+              [class.text-[#3E2723]]="currentTab() !== 'planner'"
+              [class.border-[#E6DED6]]="currentTab() !== 'planner'"
+              [class.hover:bg-[#F5EFEB]]="currentTab() !== 'planner'"
+              class="px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-black flex items-center gap-1.5 sm:gap-2 cursor-pointer transition-all border whitespace-nowrap"
+            >
+              <span class="mat-icon text-base" [class.text-[#74C69D]]="currentTab() === 'planner'" [class.text-[#2D6A4F]]="currentTab() !== 'planner'" aria-hidden="true">route</span>
+              <span>Verbindungen</span>
+            </button>
+
+            <!-- 2. Abfahrten -->
+            <button
+              type="button"
+              id="nav-tab-live-board"
+              (click)="setTab('live-board')"
+              role="tab"
+              [attr.aria-selected]="currentTab() === 'live-board'"
+              [attr.aria-current]="currentTab() === 'live-board' ? 'page' : null"
+              aria-label="Live-Abfahrten und Gleise"
+              [class.bg-[#1B4332]]="currentTab() === 'live-board'"
+              [class.text-white]="currentTab() === 'live-board'"
+              [class.shadow-2xs]="currentTab() === 'live-board'"
+              [class.border-[#1B4332]]="currentTab() === 'live-board'"
+              [class.bg-white]="currentTab() !== 'live-board'"
+              [class.text-[#3E2723]]="currentTab() !== 'live-board'"
+              [class.border-[#E6DED6]]="currentTab() !== 'live-board'"
+              [class.hover:bg-[#F5EFEB]]="currentTab() !== 'live-board'"
+              class="px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-black flex items-center gap-1.5 sm:gap-2 cursor-pointer transition-all border whitespace-nowrap"
+            >
+              <span class="mat-icon text-base" [class.text-[#74C69D]]="currentTab() === 'live-board'" [class.text-[#2D6A4F]]="currentTab() !== 'live-board'" aria-hidden="true">departure_board</span>
+              <span>Abfahrten</span>
+            </button>
+          </nav>
+        </div>
+
+        <!-- Right Section: Pure Hamburger Menu Icon Button + PWA Install -->
+        <div class="flex items-center gap-2 ml-auto shrink-0">
+
+          <!-- App Install Button (Visible when installable/iOS and not yet installed in standalone) -->
+          @if (pwaService.canInstall()) {
+            <button
+              type="button"
+              id="btn-install-pwa-header"
+              (click)="pwaService.promptInstall()"
+              role="button"
+              aria-label="App auf dem Gerät installieren"
+              class="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-[#1B4332] hover:bg-[#2D6A4F] text-white rounded-lg text-xs font-bold border border-[#1B4332] cursor-pointer shadow-2xs transition-all hover:scale-[1.02] active:scale-[0.98]"
+              title="App auf dem Gerät installieren"
+            >
+              <span class="mat-icon text-sm text-[#74C69D]" aria-hidden="true">download_for_offline</span>
+              <span>App installieren</span>
+            </button>
+          }
+
+          <!-- Hamburger Popup Menu Button (Icon Only) -->
+          <div class="relative">
+            <button
+              type="button"
+              id="btn-more-options-menu"
+              (click)="showMoreMenu.set(!showMoreMenu())"
+              role="button"
+              aria-haspopup="true"
+              [attr.aria-expanded]="showMoreMenu()"
+              aria-controls="dropdown-more-options"
+              [class.bg-[#EDF9F0]]="isExtraTabActive() || showMoreMenu()"
+              [class.border-[#2D6A4F]]="isExtraTabActive() || showMoreMenu()"
+              [class.text-[#1B4332]]="isExtraTabActive() || showMoreMenu()"
+              [class.bg-white]="!isExtraTabActive() && !showMoreMenu()"
+              [class.border-[#E6DED6]]="!isExtraTabActive() && !showMoreMenu()"
+              [class.text-[#4E342E]]="!isExtraTabActive() && !showMoreMenu()"
+              class="w-9 h-9 sm:w-10 sm:h-10 rounded-lg border hover:bg-[#EFEBE6] flex items-center justify-center cursor-pointer transition-all shadow-2xs relative"
+              aria-label="Menü für weitere Ansichten und Optionen"
+              title="Menü und weitere Optionen"
+            >
+              @if (isExtraTabActive()) {
+                <span class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#2D6A4F] ring-1.5 ring-white" aria-hidden="true"></span>
+              }
+              <span class="mat-icon text-lg sm:text-xl" aria-hidden="true">{{ isExtraTabActive() ? getExtraTabIcon() : 'menu' }}</span>
+            </button>
+
+            <!-- Backdrop to close popup on outer click -->
+            @if (showMoreMenu()) {
+              <button
+                type="button"
+                role="button"
+                aria-label="Menü schließen"
+                class="fixed inset-0 z-40 cursor-default w-full h-full bg-transparent border-0 p-0"
+                (click)="showMoreMenu.set(false)"
+              ></button>
+
+              <!-- Sleek Dropdown Menu -->
+              <div
+                id="dropdown-more-options"
+                role="menu"
+                aria-label="Erweiterte Optionen und Ansichten"
+                class="absolute right-0 mt-2 w-64 bg-white border border-[#E6DED6] rounded-xl shadow-lg py-1.5 z-50 divide-y divide-[#F0EAE1] animate-in fade-in zoom-in-95 duration-150"
+              >
+                <!-- Menu Header -->
+                <div class="px-3.5 py-2 bg-[#FAF7F2]">
+                  <div class="text-[10px] font-black uppercase tracking-wider text-[#795548]">D-Ticket Explorer</div>
+                  <div class="text-xs text-[#1F1612] font-semibold">Erweiterte Ansichten & Optionen</div>
+                </div>
+
+                <!-- Secondary Tabs/Views -->
+                <div class="py-1" role="none">
+                  <!-- 1. Favoriten -->
+                  <button
+                    type="button"
+                    id="menu-item-favorites"
+                    role="menuitem"
+                    aria-label="Favoriten und gespeicherte Strecken anzeigen"
+                    (click)="setTab('favorites'); showMoreMenu.set(false)"
+                    [class.bg-[#EDF9F0]]="currentTab() === 'favorites'"
+                    [class.text-[#1B4332]]="currentTab() === 'favorites'"
+                    class="w-full text-left px-3.5 py-2 text-xs font-bold text-[#3E2723] hover:bg-[#FAF7F2] flex items-center justify-between gap-2 cursor-pointer transition-colors"
+                  >
+                    <div class="flex items-center gap-2">
+                      <span class="mat-icon text-base text-[#D4A373]" aria-hidden="true">star</span>
+                      <span>Favoriten & Gespeichert</span>
+                    </div>
+                    @if (currentTab() === 'favorites') {
+                      <span class="text-[10px] font-black text-[#2D6A4F] bg-[#D8F3DC] px-1.5 py-0.2 rounded" aria-label="Aktive Ansicht">Aktiv</span>
+                    }
+                  </button>
+
+                  <!-- 2. Regionalnetz / Hamburg Hub -->
+                  <button
+                    type="button"
+                    id="menu-item-hamburg-hub"
+                    role="menuitem"
+                    aria-label="Regionalnetz Hamburg und Ziele nach Bundesländern"
+                    (click)="setTab('hamburg-hub'); showMoreMenu.set(false)"
+                    [class.bg-[#EDF9F0]]="currentTab() === 'hamburg-hub'"
+                    [class.text-[#1B4332]]="currentTab() === 'hamburg-hub'"
+                    class="w-full text-left px-3.5 py-2 text-xs font-bold text-[#3E2723] hover:bg-[#FAF7F2] flex items-center justify-between gap-2 cursor-pointer transition-colors"
+                  >
+                    <div class="flex items-center gap-2">
+                      <span class="mat-icon text-base text-[#2D6A4F]" aria-hidden="true">anchor</span>
+                      <span>Regionalnetz Hamburg</span>
+                    </div>
+                    @if (currentTab() === 'hamburg-hub') {
+                      <span class="text-[10px] font-black text-[#2D6A4F] bg-[#D8F3DC] px-1.5 py-0.2 rounded" aria-label="Aktive Ansicht">Aktiv</span>
+                    }
+                  </button>
+
+                  <!-- 3. Überrasche mich / Ausflugsideen -->
+                  <button
+                    type="button"
+                    id="menu-item-surprise"
+                    role="menuitem"
+                    aria-label="Überrasche mich Zufallsgenerator für Tagesausflüge"
+                    (click)="setTab('surprise'); showMoreMenu.set(false)"
+                    [class.bg-[#EDF9F0]]="currentTab() === 'surprise'"
+                    [class.text-[#1B4332]]="currentTab() === 'surprise'"
+                    class="w-full text-left px-3.5 py-2 text-xs font-bold text-[#3E2723] hover:bg-[#FAF7F2] flex items-center justify-between gap-2 cursor-pointer transition-colors"
+                  >
+                    <div class="flex items-center gap-2">
+                      <span class="mat-icon text-base text-[#2D6A4F]" aria-hidden="true">shuffle</span>
+                      <span>Überrasche mich (Ausflug)</span>
+                    </div>
+                    @if (currentTab() === 'surprise') {
+                      <span class="text-[10px] font-black text-[#2D6A4F] bg-[#D8F3DC] px-1.5 py-0.2 rounded" aria-label="Aktive Ansicht">Aktiv</span>
+                    }
+                  </button>
+
+                  <!-- 4. Karte umschalten -->
+                  <button
+                    type="button"
+                    id="menu-item-toggle-map"
+                    role="menuitem"
+                    [attr.aria-label]="showMap() ? 'Übersichtskarte verbergen' : 'Übersichtskarte anzeigen'"
+                    (click)="showMap.set(!showMap()); showMoreMenu.set(false)"
+                    class="w-full text-left px-3.5 py-2 text-xs font-bold text-[#3E2723] hover:bg-[#FAF7F2] flex items-center justify-between gap-2 cursor-pointer transition-colors"
+                  >
+                    <div class="flex items-center gap-2">
+                      <span class="mat-icon text-base text-[#2D6A4F]" aria-hidden="true">map</span>
+                      <span>{{ showMap() ? 'Übersichtskarte verbergen' : 'Übersichtskarte anzeigen' }}</span>
+                    </div>
+                    <span class="text-[10px] font-bold text-[#795548] bg-[#FAF7F2] border border-[#E6DED6] px-1.5 py-0.2 rounded">
+                      {{ showMap() ? 'An' : 'Aus' }}
+                    </span>
+                  </button>
+
+                  <!-- 5. App Installieren Option -->
+                  @if (pwaService.canInstall()) {
+                    <button
+                      type="button"
+                      id="menu-item-install-pwa"
+                      role="menuitem"
+                      aria-label="App auf dem Gerät installieren (Progressive Web App)"
+                      (click)="pwaService.promptInstall(); showMoreMenu.set(false)"
+                      class="w-full text-left px-3.5 py-2 text-xs font-bold text-[#1B4332] bg-[#EDF9F0] hover:bg-[#D8F3DC] flex items-center justify-between gap-2 cursor-pointer transition-colors"
+                    >
+                      <div class="flex items-center gap-2">
+                        <span class="mat-icon text-base text-[#2D6A4F]" aria-hidden="true">download_for_offline</span>
+                        <span>App installieren</span>
+                      </div>
+                      <span class="text-[10px] font-black text-[#1B4332] bg-white border border-[#B7E4C7] px-1.5 py-0.2 rounded">PWA</span>
+                    </button>
+                  }
+                </div>
+
+                <!-- Footer tip -->
+                <div class="px-3.5 py-1.5 text-[11px] text-[#8D6E63] flex items-center gap-1.5 bg-[#FAF7F2]/50">
+                  <span class="mat-icon text-xs text-[#2D6A4F]" aria-hidden="true">info</span>
+                  <span>100% Gültig mit Deutschlandticket</span>
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Layout with tighter top margin -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-3.5 sm:py-4">
+    <div class="grid grid-cols-1 gap-6" [class.lg:grid-cols-12]="showMap()">
+      
+      <!-- Primary View Container -->
+      <div class="min-w-0 space-y-6" [class.lg:col-span-7]="showMap()" [class.lg:col-span-12]="!showMap()">
+        @switch (currentTab()) {
+          @case ('planner') {
+            <app-planner-view
+              (showOnMap)="onShowJourneyOnMap($event)"
+              (viewDetail)="onOpenJourneyDetail($event)"
+              (switchTab)="setTab($event)"
+            ></app-planner-view>
+          }
+          @case ('live-board') {
+            <app-live-board-view
+              (navigateToPlanner)="onNavigateToPlanner($event)"
+            ></app-live-board-view>
+          }
+          @case ('hamburg-hub') {
+            <app-hamburg-hub-view
+              (navigateToPlanner)="onNavigateToPlanner($event)"
+            ></app-hamburg-hub-view>
+          }
+          @case ('surprise') {
+            <app-surprise-view
+              (navigateToPlanner)="onNavigateToPlanner($event)"
+            ></app-surprise-view>
+          }
+          @case ('favorites') {
+            <app-favorites-view
+              (navigateToPlanner)="onNavigateToPlanner($event)"
+              (navigateToLiveBoard)="onNavigateToLiveBoard($event)"
+            ></app-favorites-view>
+          }
+        }
+      </div>
+
+      <!-- Interactive Map Sticky Sidebar -->
+      @if (showMap()) {
+        <aside id="map-section" class="space-y-4 lg:col-span-5">
+          <div class="sticky top-28 space-y-3">
+            <div class="flex items-center justify-between px-1">
+              <div class="flex items-center gap-2">
+                <span class="mat-icon text-[#2D6A4F] text-sm">map</span>
+                <span class="text-xs font-bold uppercase tracking-wider text-[#795548]">
+                  Interaktive Deutschlandkarte
+                </span>
+              </div>
+              <span class="text-[11px] text-[#A1887F]">OpenStreetMap</span>
+            </div>
+
+            <!-- Leaflet Map Container -->
+            <div class="h-[420px] lg:h-[calc(100vh-180px)] w-full rounded-2xl overflow-hidden border border-[#E6DED6] shadow-sm">
+              <app-map-view
+                [activeJourney]="mapActiveJourney()"
+                [selectedStation]="mapSelectedStation()"
+              ></app-map-view>
+            </div>
+          </div>
+        </aside>
+      }
+
+    </div>
+  </main>
+
+  <!-- Journey Detail Modal -->
+  @if (inspectJourney()) {
+    <app-journey-detail
+      [journey]="inspectJourney()"
+      (closeModal)="inspectJourney.set(null)"
+      (showOnMap)="onShowJourneyOnMap($event)"
+    ></app-journey-detail>
+  }
+
+  <!-- Footer in German with Green & Coffee tone -->
+  <footer class="mt-auto bg-white border-t border-[#E6DED6] py-6 text-[#795548] text-xs">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3">
+      <div class="flex items-center gap-2">
+        <span class="font-bold text-[#3E2723]">hvv switch • Deutschland Regional</span>
+        <span>—</span>
+        <span>Ausschließlich Nahverkehr & Deutschlandticket (RE, RB, S-Bahn)</span>
+      </div>
+      <div class="text-[#8D6E63]">
+        Echtzeitdaten via Deutsche Bahn HAFAS & OpenStreetMap
+      </div>
+    </div>
+  </footer>
+
+  <!-- PWA Install Modal & Offline Indicator -->
+  <app-pwa-install></app-pwa-install>
+
+</div>
+

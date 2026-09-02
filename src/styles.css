@@ -1,0 +1,128 @@
+@import url('https://fonts.googleapis.com/icon?family=Material+Icons');
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --color-forest-900: #132a1e;
+    --color-forest-800: #1b4332;
+    --color-forest-700: #2d6a4f;
+    --color-forest-600: #40916c;
+    --color-forest-500: #52b788;
+    --color-forest-100: #d8f3dc;
+    --color-forest-50: #edf9f0;
+
+    --color-coffee-950: #1f1612;
+    --color-coffee-900: #2e1f18;
+    --color-coffee-800: #3e2723;
+    --color-coffee-700: #4e342e;
+    --color-coffee-600: #5d4037;
+    --color-coffee-500: #795548;
+    --color-coffee-400: #8d6e63;
+    --color-coffee-300: #bcaaa4;
+    --color-coffee-200: #d7ccc8;
+    --color-coffee-100: #efebe9;
+    --color-coffee-50: #fbf9f7;
+
+    --color-cream-canvas: #faf7f2;
+    --color-latte-card: #f5efe6;
+    --color-warm-border: #e6ded6;
+  }
+
+  body {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: #faf7f2;
+    color: #2e1f18;
+  }
+
+  /* Universal 7px border radius mandate across interface elements */
+  *, ::before, ::after {
+    border-radius: inherit;
+  }
+
+  button, input, select, textarea, .mat-icon-button {
+    border-radius: 6px;
+  }
+}
+
+/* Explicit 4px border radius support for compact controls */
+.rounded-\[4px\],
+[class*="rounded-[4px]"] {
+  border-radius: 4px !important;
+}
+
+/* Material Icons sizing and alignment */
+.mat-icon {
+  font-family: 'Material Icons';
+  font-weight: normal;
+  font-style: normal;
+  font-size: 20px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Standardized 7px border radius styling for all containers, cards, badges, buttons, inputs, pills */
+.rounded-3xl,
+.rounded-2xl,
+.rounded-xl,
+.rounded-lg,
+.rounded-md,
+.rounded-sm,
+.rounded-full,
+.rounded {
+  border-radius: 7px !important;
+}
+
+/* Custom Leaflet Map styling */
+.leaflet-popup-content-wrapper {
+  border-radius: 7px !important;
+  background-color: #ffffff;
+  border: 1px solid #e6ded6;
+  box-shadow: 0 12px 28px -6px rgba(46, 31, 24, 0.12), 0 6px 12px -4px rgba(46, 31, 24, 0.08);
+  padding: 4px;
+}
+
+.leaflet-popup-content {
+  margin: 10px 14px;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  color: #2e1f18;
+}
+
+.leaflet-container {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  z-index: 10;
+  border-radius: 7px !important;
+}
+
+/* Custom train line badges with switch design */
+.badge-re {
+  background-color: #c92a2a;
+  color: white;
+  border-radius: 7px !important;
+}
+
+.badge-rb {
+  background-color: #2d6a4f;
+  color: white;
+  border-radius: 7px !important;
+}
+
+.badge-s {
+  background-color: #1e5e63;
+  color: white;
+  border-radius: 7px !important;
+}
+
+.badge-ice {
+  background-color: #4e342e;
+  color: white;
+  border-radius: 7px !important;
+}
