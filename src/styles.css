@@ -28,6 +28,11 @@
     --color-warm-border: #e6ded6;
   }
 
+  html, body {
+    min-width: 1120px;
+    overflow-x: auto;
+  }
+
   body {
     font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     background-color: #faf7f2;

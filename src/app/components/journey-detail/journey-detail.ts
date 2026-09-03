@@ -101,11 +101,11 @@ export interface EnrichedStopover {
         </header>
 
         <!-- 2. FULLSCREEN MAIN CONTENT (2-Column Grid on Desktop) -->
-        <main class="flex-1 w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-6">
-          <div class="grid grid-cols-1 gap-4 sm:gap-6" [class.lg:grid-cols-12]="showDetailMap()" [class.lg:grid-cols-1]="!showDetailMap()">
+        <main class="flex-1 w-full max-w-7xl mx-auto px-6 lg:px-8 py-6">
+          <div class="grid gap-6" [class.grid-cols-12]="showDetailMap()" [class.grid-cols-1]="!showDetailMap()">
             
             <!-- LEFT COLUMN: DIDACTIC ITINERARY & CONNECTION DETAILS -->
-            <div class="space-y-3 sm:space-y-4" [class.lg:col-span-7]="showDetailMap()" [class.max-w-3xl]="!showDetailMap()" [class.mx-auto]="!showDetailMap()">
+            <div class="space-y-4" [class.col-span-7]="showDetailMap()" [class.max-w-3xl]="!showDetailMap()" [class.mx-auto]="!showDetailMap()">
               
               <!-- REAL-TIME LIVE STATUS BANNER (Dynamic Live Position Highlight) -->
               <div class="bg-white rounded-2xl p-3.5 sm:p-4 border border-[#E6DED6] shadow-xs space-y-3" role="region" aria-label="Echtzeit-Fahrtstatus">
@@ -621,7 +621,7 @@ export interface EnrichedStopover {
 
             <!-- RIGHT COLUMN: INTERACTIVE MAP & ROUTE TRAJECTORY (Sticky on Desktop) -->
             @if (showDetailMap()) {
-              <div class="space-y-3 lg:col-span-5">
+              <div class="space-y-3 col-span-5">
                 <div class="sticky top-20 space-y-2">
                   <div class="flex items-center justify-between px-1">
                     <div class="flex items-center gap-2">
