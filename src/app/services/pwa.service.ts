@@ -19,14 +19,14 @@ export class PwaService {
   readonly isInstallable = signal<boolean>(false);
   readonly isInstalled = signal<boolean>(false);
   readonly isIOS = signal<boolean>(false);
+  readonly isAndroid = signal<boolean>(false);
   readonly isOnline = signal<boolean>(true);
   readonly showIOSModal = signal<boolean>(false);
   readonly installOutcome = signal<'accepted' | 'dismissed' | null>(null);
 
-  // Can show install action (either native prompt available or iOS instructions)
+  // The install button is ALWAYS visible to motivate the user until they actually install the app
   readonly canInstall = computed(() => {
-    if (this.isInstalled()) return false;
-    return this.isInstallable() || this.isIOS();
+    return !this.isInstalled();
   });
 
   constructor() {
@@ -37,15 +37,36 @@ export class PwaService {
 
   private initPwa(): void {
     // 1. Check if already installed / running in standalone window mode
-    const isStandalone =
-      window.matchMedia('(display-mode: standalone)').matches ||
-      (window.navigator as unknown as { standalone?: boolean }).standalone === true;
-    this.isInstalled.set(isStandalone);
+    const checkStandalone = () => {
+      const isStandalone =
+        window.matchMedia('(display-mode: standalone)').matches ||
+        window.matchMedia('(display-mode: minimal-ui)').matches ||
+        window.matchMedia('(display-mode: fullscreen)').matches ||
+        (window.navigator as unknown as { standalone?: boolean }).standalone === true ||
+        document.referrer.includes('android-app://');
+      this.isInstalled.set(isStandalone);
+    };
+    checkStandalone();
 
-    // 2. Detect iOS device (iPhone, iPad, iPod)
+    try {
+      window.matchMedia('(display-mode: standalone)').addEventListener('change', (e) => {
+        if (e.matches) {
+          this.isInstalled.set(true);
+        }
+      });
+    } catch {
+      // ignore
+    }
+
+    // 2. Detect device & platform
     const userAgent = window.navigator.userAgent.toLowerCase();
-    const isIOSDevice = /iphone|ipad|ipod/.test(userAgent);
+    const isIOSDevice =
+      /iphone|ipad|ipod/.test(userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     this.isIOS.set(isIOSDevice);
+
+    const isAndroidDevice = /android/.test(userAgent);
+    this.isAndroid.set(isAndroidDevice);
 
     // 3. Online/offline connectivity listeners
     this.isOnline.set(navigator.onLine);
@@ -67,13 +88,12 @@ export class PwaService {
       this.installOutcome.set('accepted');
     });
 
-    // 6. Register Service Worker
+    // 6. Register Service Worker reliably (even if window load already fired)
     if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
+      const registerSW = () => {
         navigator.serviceWorker
-          .register('/sw.js')
+          .register('/sw.js', { scope: '/' })
           .then((reg) => {
-            // Check for updates
             reg.onupdatefound = () => {
               const installingWorker = reg.installing;
               if (installingWorker) {
@@ -85,10 +105,16 @@ export class PwaService {
               }
             };
           })
-          .catch(() => {
-            // Service worker registration error handled silently
+          .catch((err) => {
+            console.warn('Service worker registration failed:', err);
           });
-      });
+      };
+
+      if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        registerSW();
+      } else {
+        window.addEventListener('load', registerSW);
+      }
     }
   }
 
@@ -96,32 +122,29 @@ export class PwaService {
    * Trigger install flow
    */
   async promptInstall(): Promise<boolean> {
-    if (this.isIOS()) {
-      this.showIOSModal.set(true);
-      return true;
-    }
+    if (this.deferredPrompt) {
+      try {
+        await this.deferredPrompt.prompt();
+        const choice = await this.deferredPrompt.userChoice;
+        this.installOutcome.set(choice.outcome);
 
-    if (!this.deferredPrompt) {
-      // Fallback for desktop/android when prompt not yet fired: show iOS/Manual guidance
-      this.showIOSModal.set(true);
-      return false;
-    }
-
-    try {
-      await this.deferredPrompt.prompt();
-      const choice = await this.deferredPrompt.userChoice;
-      this.installOutcome.set(choice.outcome);
-
-      if (choice.outcome === 'accepted') {
-        this.isInstalled.set(true);
-        this.isInstallable.set(false);
-        this.deferredPrompt = null;
-        return true;
+        if (choice.outcome === 'accepted') {
+          this.isInstalled.set(true);
+          this.isInstallable.set(false);
+          this.deferredPrompt = null;
+          this.showIOSModal.set(false);
+          return true;
+        } else {
+          // If dismissed, keep install button visible to motivate later
+          return false;
+        }
+      } catch (err) {
+        console.warn('Fehler beim Installationsdialog:', err);
       }
-    } catch {
-      // Fallback
     }
 
+    // If native prompt is not yet available, or on iOS/Safari/desktop, open the guided install modal
+    this.showIOSModal.set(true);
     return false;
   }
 

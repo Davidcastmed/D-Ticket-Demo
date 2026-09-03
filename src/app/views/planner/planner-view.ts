@@ -35,10 +35,10 @@ interface CuratedDestination {
     <div class="space-y-5">
       
       <!-- PRIMARY GRID LAYOUT: Connection Planner & Results (Left) + 'Entdecke Deutschland' Highlights (Right) -->
-      <div class="grid grid-cols-12 gap-5 items-start">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
         
         <!-- LEFT COLUMN: Minimalist Connection Planner & Direct Results underneath -->
-        <div class="col-span-7 space-y-5">
+        <div class="lg:col-span-7 space-y-5">
           <!-- CARD 1: Minimalist Connection Planner (DB Navigator style clean layout) -->
           <div class="relative bg-white rounded-xl p-4 sm:p-5 pt-5 sm:pt-6 border border-[#E6DED6] shadow-xs space-y-4">
           
@@ -1040,7 +1040,7 @@ interface CuratedDestination {
       </div>
 
       <!-- RIGHT COLUMN: 'Entdecke Deutschland' Highlights Module (Side Showcase) -->
-      <div class="col-span-5 bg-white rounded-2xl p-5 border border-[#E6DED6] shadow-xs space-y-4" role="complementary" aria-label="Ausflugs-Highlights">
+      <div class="lg:col-span-5 bg-white rounded-2xl p-5 sm:p-6 border border-[#E6DED6] shadow-xs space-y-4" role="complementary" aria-label="Ausflugs-Highlights">
         
         <!-- Header with View All Link -->
         <div class="flex items-center justify-between pb-3 border-b border-[#EDE5DC]">

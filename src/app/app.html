@@ -1,22 +1,22 @@
-<div class="min-h-screen min-w-[1120px] bg-[#FAF7F2] flex flex-col font-sans text-[#2E1F18] selection:bg-[#2D6A4F] selection:text-white">
+<div class="min-h-screen bg-[#FAF7F2] flex flex-col font-sans text-[#2E1F18] selection:bg-[#2D6A4F] selection:text-white">
   
   <!-- Minimal, Clean Navigation Header (DB & hvv inspired minimalist space efficiency) -->
   <header class="sticky top-0 z-40 bg-[#FAF7F2]/95 backdrop-blur-md border-b border-[#E6DED6]">
-    <div class="max-w-7xl mx-auto px-6 lg:px-8">
-      <div class="flex items-center justify-between h-14">
+    <div class="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-13 sm:h-14">
         
         <!-- Left Section: Brand Badge + Fixed Verbindungen & Abfahrten Buttons -->
-        <div class="flex items-center gap-3 min-w-0 flex-1">
+        <div class="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
           <!-- Minimal Brand Icon -->
           <div class="flex items-center gap-2 text-[#1F1612] shrink-0" aria-label="Deutschlandticket Explorer Logo">
             <span class="w-8 h-8 rounded-lg bg-[#1B4332] text-white flex items-center justify-center shadow-2xs" aria-hidden="true">
               <span class="mat-icon text-base text-[#B7E4C7]">train</span>
             </span>
-            <span class="inline text-xs font-black tracking-tight text-[#1F1612]">D-Ticket</span>
+            <span class="hidden md:inline text-xs font-black tracking-tight text-[#1F1612]">D-Ticket</span>
           </div>
 
           <!-- Fixed, Non-scrolling Primary Navigation (Verbindungen & Abfahrten) -->
-          <nav class="flex items-center gap-2.5 shrink-0" role="navigation" aria-label="Hauptnavigation">
+          <nav class="flex items-center gap-1.5 sm:gap-2.5 shrink-0" role="navigation" aria-label="Hauptnavigation">
             <!-- 1. Verbindungen -->
             <button
               type="button"
@@ -34,7 +34,7 @@
               [class.text-[#3E2723]]="currentTab() !== 'planner'"
               [class.border-[#E6DED6]]="currentTab() !== 'planner'"
               [class.hover:bg-[#F5EFEB]]="currentTab() !== 'planner'"
-              class="px-4 py-2 rounded-lg text-xs sm:text-sm font-black flex items-center gap-2 cursor-pointer transition-all border whitespace-nowrap"
+              class="px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-black flex items-center gap-1.5 sm:gap-2 cursor-pointer transition-all border whitespace-nowrap"
             >
               <span class="mat-icon text-base" [class.text-[#74C69D]]="currentTab() === 'planner'" [class.text-[#2D6A4F]]="currentTab() !== 'planner'" aria-hidden="true">route</span>
               <span>Verbindungen</span>
@@ -57,7 +57,7 @@
               [class.text-[#3E2723]]="currentTab() !== 'live-board'"
               [class.border-[#E6DED6]]="currentTab() !== 'live-board'"
               [class.hover:bg-[#F5EFEB]]="currentTab() !== 'live-board'"
-              class="px-4 py-2 rounded-lg text-xs sm:text-sm font-black flex items-center gap-2 cursor-pointer transition-all border whitespace-nowrap"
+              class="px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-black flex items-center gap-1.5 sm:gap-2 cursor-pointer transition-all border whitespace-nowrap"
             >
               <span class="mat-icon text-base" [class.text-[#74C69D]]="currentTab() === 'live-board'" [class.text-[#2D6A4F]]="currentTab() !== 'live-board'" aria-hidden="true">departure_board</span>
               <span>Abfahrten</span>
@@ -68,7 +68,7 @@
         <!-- Right Section: Pure Hamburger Menu Icon Button + PWA Install -->
         <div class="flex items-center gap-2 ml-auto shrink-0">
 
-          <!-- App Install Button (Visible when installable/iOS and not yet installed in standalone) -->
+          <!-- App Install Button (Always visible on all screen sizes until installed in standalone) -->
           @if (pwaService.canInstall()) {
             <button
               type="button"
@@ -76,11 +76,15 @@
               (click)="pwaService.promptInstall()"
               role="button"
               aria-label="App auf dem Gerät installieren"
-              class="flex items-center gap-1.5 px-3 py-1.5 bg-[#1B4332] hover:bg-[#2D6A4F] text-white rounded-lg text-xs font-bold border border-[#1B4332] cursor-pointer shadow-2xs transition-all hover:scale-[1.02] active:scale-[0.98]"
+              class="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-[#1B4332] hover:bg-[#2D6A4F] text-white rounded-lg text-xs font-bold border border-[#1B4332] cursor-pointer shadow-2xs transition-all hover:scale-[1.02] active:scale-[0.98]"
               title="App auf dem Gerät installieren"
             >
+              <span class="relative flex h-2 w-2">
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#74C69D] opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-2 w-2 bg-[#74C69D]"></span>
+              </span>
               <span class="mat-icon text-sm text-[#74C69D]" aria-hidden="true">download_for_offline</span>
-              <span>App installieren</span>
+              <span class="hidden xs:inline">App </span><span>Installieren</span>
             </button>
           }
 

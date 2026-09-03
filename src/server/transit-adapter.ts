@@ -1,120 +1,26 @@
 import { TOP_GERMAN_STATIONS, REGIONAL_DESTINATIONS_FROM_HAMBURG } from './german-regions-data';
+import { ALL_GERMAN_STATIONS } from '../app/data/stations-data';
+import {
+  StationLocation,
+  Station,
+  TransitLine,
+  Stopover,
+  TransitRemark,
+  TransitLeg,
+  ConnectionJourney,
+  DepartureItem
+} from '../app/models/transit.models';
 
-export interface StationLocation {
-  type?: string;
-  latitude: number;
-  longitude: number;
-}
-
-export interface Station {
-  id: string;
-  name: string;
-  location?: StationLocation;
-  products?: Record<string, boolean>;
-  weight?: number;
-}
-
-export interface TransitLine {
-  id?: string;
-  name: string;
-  mode: string;
-  product: string;
-  productName?: string;
-  operator?: {
-    id?: string;
-    name: string;
-  };
-  fahrtNr?: string;
-  adminCode?: string;
-}
-
-export interface Stopover {
-  stop: Station;
-  arrival?: string | null;
-  departure?: string | null;
-  plannedArrival?: string | null;
-  plannedDeparture?: string | null;
-  arrivalDelay?: number | null;
-  departureDelay?: number | null;
-  arrivalPlatform?: string | null;
-  departurePlatform?: string | null;
-  platform?: string | null;
-  cancelled?: boolean;
-}
-
-export interface TransitRemark {
-  type?: string;
-  code?: string;
-  text?: string;
-  summary?: string;
-}
-
-export interface TransitLeg {
-  origin: Station;
-  destination: Station;
-  departure: string;
-  plannedDeparture: string;
-  departureDelay?: number;
-  departurePlatform?: string | null;
-  arrival: string;
-  plannedArrival: string;
-  arrivalDelay?: number;
-  arrivalPlatform?: string | null;
-  line?: TransitLine;
-  direction?: string;
-  isDeutschlandticketValid: boolean;
-  cancelled?: boolean;
-  walking?: boolean;
-  distance?: number;
-  durationMinutes?: number;
-  stopovers?: Stopover[];
-  polyline?: [number, number][];
-  remarks?: TransitRemark[];
-}
-
-export interface ConnectionJourney {
-  id: string;
-  origin: Station;
-  destination: Station;
-  departure: string;
-  plannedDeparture: string;
-  arrival: string;
-  plannedArrival: string;
-  durationMinutes: number;
-  durationFormatted: string;
-  transfers: number;
-  legs: TransitLeg[];
-  isDeutschlandticketValid: boolean;
-  rankType?: 'fastest' | 'fewest-transfers' | 'comfortable';
-  rankBadgeLabel?: string;
-  hasDelay: boolean;
-  maxDelay: number;
-  cancelled: boolean;
-  distanceKm?: number;
-  isLongDistance?: boolean;
-  longDistanceWarning?: string;
-  transferDetails: {
-    stationName: string;
-    bufferMinutes: number;
-  }[];
-  remarks?: TransitRemark[];
-}
-
-export interface DepartureItem {
-  id: string;
-  line: string;
-  product: string;
-  direction: string;
-  destination: Station;
-  when: string;
-  plannedWhen: string;
-  delay: number;
-  platform?: string | null;
-  operator?: string;
-  cancelled?: boolean;
-  isDeutschlandticketValid: boolean;
-  stopovers?: Stopover[];
-}
+export type {
+  StationLocation,
+  Station,
+  TransitLine,
+  Stopover,
+  TransitRemark,
+  TransitLeg,
+  ConnectionJourney,
+  DepartureItem
+};
 
 const HAFAS_API_BASE = 'https://v6.db.transport.rest';
 const cache = new Map<string, { timestamp: number; data: unknown }>();
@@ -141,12 +47,15 @@ async function fetchSafeJson<T>(url: string, timeoutMs = 6000): Promise<T | null
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const headers: Record<string, string> = {
+      'Accept': 'application/json'
+    };
+    if (typeof window === 'undefined') {
+      headers['User-Agent'] = 'DeutschlandRegionalExplorer/1.0 (Web/PWA; RegionalTransit)';
+    }
     const res = await fetch(url, {
       signal: controller.signal,
-      headers: {
-        'Accept': 'application/json',
-        'User-Agent': 'DeutschlandRegionalExplorer/1.0 (Web/PWA; RegionalTransit)'
-      }
+      headers
     });
     clearTimeout(timer);
     if (res.ok) {
@@ -319,7 +228,10 @@ export async function searchStations(query: string, userLat?: number, userLon?: 
   const aliasExpansions = QUERY_ALIASES[rawQ] || QUERY_ALIASES[normQ] || [];
 
   const localMatches: Station[] = [];
+  const seenIds = new Set<string>();
+
   for (const s of TOP_GERMAN_STATIONS) {
+    seenIds.add(s.id);
     const sNorm = normalizeForSearch(s.name);
     let matchScore = 0;
 
@@ -365,6 +277,42 @@ export async function searchStations(query: string, userLat?: number, userLon?: 
         location: { latitude: s.latitude, longitude: s.longitude },
         weight: score
       });
+    }
+  }
+
+  // Also query comprehensive nationwide German stations dataset
+  for (const s of ALL_GERMAN_STATIONS) {
+    if (seenIds.has(s.id)) continue;
+    const sNorm = normalizeForSearch(s.name);
+    let matchScore = 0;
+
+    if (sNorm === normQ || s.name.toLowerCase() === rawQ) {
+      matchScore += 115;
+    } else if (sNorm.startsWith(normQ) || s.name.toLowerCase().startsWith(rawQ)) {
+      matchScore += 65;
+    } else if (sNorm.includes(` ${normQ}`) || s.name.toLowerCase().includes(` ${rawQ}`)) {
+      matchScore += 45;
+    } else if (sNorm.includes(normQ)) {
+      matchScore += 30;
+    }
+
+    if (matchScore > 0) {
+      let score = (s.weight || 50) + matchScore;
+      if (userLat !== undefined && userLon !== undefined && s.location) {
+        const distKm = calculateDistanceKm(userLat, userLon, s.location.latitude, s.location.longitude);
+        if (distKm < 5) score += 80;
+        else if (distKm < 15) score += 55;
+        else if (distKm < 35) score += 35;
+        else if (distKm < 75) score += 20;
+      }
+
+      localMatches.push({
+        id: s.id,
+        name: s.name,
+        location: s.location ? { latitude: s.location.latitude, longitude: s.location.longitude } : undefined,
+        weight: score
+      });
+      seenIds.add(s.id);
     }
   }
 
@@ -438,13 +386,24 @@ export async function searchStations(query: string, userLat?: number, userLon?: 
 // Find Station by Name or ID
 export async function getOrResolveStation(nameOrId: string): Promise<Station> {
   const trimmed = nameOrId.trim();
-  const known = TOP_GERMAN_STATIONS.find(s => s.id === trimmed || s.name.toLowerCase() === trimmed.toLowerCase());
+  const lower = trimmed.toLowerCase();
+  const known = TOP_GERMAN_STATIONS.find(s => s.id === trimmed || s.name.toLowerCase() === lower);
   if (known) {
     return {
       id: known.id,
       name: known.name,
       location: { latitude: known.latitude, longitude: known.longitude },
       weight: known.weight
+    };
+  }
+
+  const fromAll = ALL_GERMAN_STATIONS.find(s => s.id === trimmed || s.name.toLowerCase() === lower);
+  if (fromAll) {
+    return {
+      id: fromAll.id,
+      name: fromAll.name,
+      location: fromAll.location ? { latitude: fromAll.location.latitude, longitude: fromAll.location.longitude } : undefined,
+      weight: fromAll.weight || 50
     };
   }
 

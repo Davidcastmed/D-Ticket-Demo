@@ -29,7 +29,7 @@ export interface TransitLine {
   id?: string;
   name: string;
   mode: string;
-  product: 'regionalExp' | 'regional' | 'suburban' | 'nationalExpress' | 'national' | 'bus' | 'ferry' | 'tram' | 'unknown';
+  product: 'regionalExp' | 'regional' | 'suburban' | 'nationalExpress' | 'national' | 'bus' | 'ferry' | 'tram' | 'unknown' | string;
   productName?: string;
   operator?: {
     id?: string;

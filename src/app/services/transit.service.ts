@@ -7,12 +7,13 @@ import {
 } from '../models/transit.models';
 import { ALL_GERMAN_STATIONS, calculateDistanceKm } from '../data/stations-data';
 import {
-  searchStations as localSearchStations,
-  searchConnections as localSearchConnections,
-  getStationDepartures as localGetStationDepartures
+  searchStations as searchStationsDirect,
+  searchConnections as searchConnectionsDirect,
+  getStationDepartures as getStationDeparturesDirect
 } from '../../server/transit-adapter';
 import {
-  REGIONAL_DESTINATIONS_FROM_HAMBURG
+  REGIONAL_DESTINATIONS_FROM_HAMBURG,
+  BUNDESLAENDER_METADATA
 } from '../../server/german-regions-data';
 
 export interface FavoriteRoute {
@@ -245,109 +246,17 @@ export class TransitService {
     return nearest;
   }
 
-  async searchStations(query: string): Promise<Station[]> {
-    const q = query.trim();
-    if (!q) return [];
-    
-    const loc = this.userLocation();
-    const cacheKey = `${q.toLowerCase()}_${loc ? Math.round(loc.latitude * 100) : 'none'}_${loc ? Math.round(loc.longitude * 100) : 'none'}`;
-
-    if (this.stationCache.has(cacheKey)) {
-      return this.stationCache.get(cacheKey)!;
+  private enhanceJourneys(
+    journeys: ConnectionJourney[],
+    params: {
+      isFromCurrentLocation?: boolean;
+      currentLocationCoords?: { latitude: number; longitude: number };
     }
-
-    try {
-      const params = new URLSearchParams({ query: q });
-      if (loc) {
-        params.set('lat', String(loc.latitude));
-        params.set('lon', String(loc.longitude));
-      }
-      const res = await fetch(`/api/stations?${params.toString()}`);
-      const contentType = res.headers.get('content-type') || '';
-      if (res.ok && contentType.includes('application/json')) {
-        const data: Station[] = await res.json();
-        if (Array.isArray(data) && data.length > 0) {
-          this.stationCache.set(cacheKey, data);
-          return data;
-        }
-      }
-      throw new Error('Fallback to local engine');
-    } catch {
-      // In-app resilient fallback (e.g. Vercel static deployment, network latency)
-      try {
-        const data = await localSearchStations(q, loc?.latitude, loc?.longitude);
-        this.stationCache.set(cacheKey, data);
-        return data;
-      } catch (err) {
-        console.warn('Fehler bei der Stationsabfrage:', err);
-        return [];
-      }
-    }
-  }
-
-  async findConnections(params: {
-    from: string;
-    to: string;
-    departureTime?: string;
-    dTicketOnly: boolean;
-    includeFernverkehr: boolean;
-    isFromCurrentLocation?: boolean;
-    currentLocationCoords?: { latitude: number; longitude: number };
-  }): Promise<{ journeys: ConnectionJourney[]; error?: string }> {
-    let rawJourneys: ConnectionJourney[] = [];
-
-    // Step 1: Attempt to fetch from backend server / serverless function
-    try {
-      const queryParams = new URLSearchParams({
-        from: params.from,
-        to: params.to,
-        dTicketOnly: String(params.dTicketOnly),
-        includeFernverkehr: String(params.includeFernverkehr)
-      });
-      if (params.departureTime) {
-        queryParams.set('departure', params.departureTime);
-      }
-
-      const res = await fetch(`/api/connections?${queryParams.toString()}`);
-      const contentType = res.headers.get('content-type') || '';
-      if (res.ok && contentType.includes('application/json')) {
-        const data = await res.json();
-        if (Array.isArray(data.journeys) && data.journeys.length > 0) {
-          rawJourneys = data.journeys;
-        }
-      }
-    } catch {
-      // Network or API route unreachable (e.g. Vercel SPA deployment without serverless)
-    }
-
-    // Step 2: Resilient in-app transit engine fallback if API returned 404/500/empty
-    if (rawJourneys.length === 0) {
-      try {
-        const fallbackResults = await localSearchConnections({
-          from: params.from,
-          to: params.to,
-          departure: params.departureTime,
-          dTicketOnly: params.dTicketOnly,
-          includeFernverkehr: params.includeFernverkehr
-        });
-        rawJourneys = fallbackResults as unknown as ConnectionJourney[];
-      } catch (fallbackErr) {
-        console.error('Lokaler Transit-Berechnungsfehler:', fallbackErr);
-      }
-    }
-
-    if (rawJourneys.length === 0) {
-      return {
-        journeys: [],
-        error: 'Für diese Strecke wurde im gewählten Zeitfenster keine passende Verbindung gefunden.'
-      };
-    }
-
-    const userCoords = params.currentLocationCoords || this.userLocation();
-    const journeys: ConnectionJourney[] = rawJourneys.map((j: ConnectionJourney) => {
+  ): ConnectionJourney[] {
+    return journeys.map((j: ConnectionJourney) => {
+      const userCoords = params.currentLocationCoords || this.userLocation();
       const startLoc = j.origin?.location || j.legs[0]?.origin?.location;
 
-      // Attach walking calculations from GPS if searched from current location
       if (params.isFromCurrentLocation) {
         let walk = { minutes: 5, distanceMeters: 400, distanceText: 'ca. 400 m' };
         if (userCoords && startLoc) {
@@ -375,28 +284,125 @@ export class TransitService {
         };
       }
     });
+  }
 
-    return { journeys };
+  async searchStations(query: string): Promise<Station[]> {
+    const q = query.trim();
+    if (!q) return [];
+    
+    const loc = this.userLocation();
+    const cacheKey = `${q.toLowerCase()}_${loc ? Math.round(loc.latitude * 100) : 'none'}_${loc ? Math.round(loc.longitude * 100) : 'none'}`;
+
+    if (this.stationCache.has(cacheKey)) {
+      return this.stationCache.get(cacheKey)!;
+    }
+
+    // 1. Try server endpoint first (timeout fast in case on static Vercel)
+    try {
+      const params = new URLSearchParams({ query: q });
+      if (loc) {
+        params.set('lat', String(loc.latitude));
+        params.set('lon', String(loc.longitude));
+      }
+      const res = await fetch(`/api/stations?${params.toString()}`, { signal: AbortSignal.timeout(2000) });
+      if (res.ok) {
+        const data: Station[] = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          this.stationCache.set(cacheKey, data);
+          return data;
+        }
+      }
+    } catch {
+      // Backend unavailable or timed out, gracefully continue to direct engine
+    }
+
+    // 2. Direct local engine fallback (works 100% on Vercel without serverless)
+    try {
+      const direct = await searchStationsDirect(q, loc?.latitude, loc?.longitude);
+      if (direct.length > 0) {
+        this.stationCache.set(cacheKey, direct);
+        return direct;
+      }
+    } catch (err) {
+      console.warn('Fehler bei der direkten Stationsabfrage:', err);
+    }
+
+    return [];
+  }
+
+  async findConnections(params: {
+    from: string;
+    to: string;
+    departureTime?: string;
+    dTicketOnly: boolean;
+    includeFernverkehr: boolean;
+    isFromCurrentLocation?: boolean;
+    currentLocationCoords?: { latitude: number; longitude: number };
+  }): Promise<{ journeys: ConnectionJourney[]; error?: string }> {
+    const queryParams = new URLSearchParams({
+      from: params.from,
+      to: params.to,
+      dTicketOnly: String(params.dTicketOnly),
+      includeFernverkehr: String(params.includeFernverkehr)
+    });
+    if (params.departureTime) {
+      queryParams.set('departure', params.departureTime);
+    }
+
+    // 1. Try server API (/api/connections) with a 3.5s timeout
+    try {
+      const res = await fetch(`/api/connections?${queryParams.toString()}`, { signal: AbortSignal.timeout(3500) });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && Array.isArray(data.journeys) && data.journeys.length > 0) {
+          return { journeys: this.enhanceJourneys(data.journeys, params) };
+        }
+      }
+    } catch {
+      // Fall through to seamless direct engine
+    }
+
+    // 2. Seamless direct engine fallback (handles Vercel static deployments, 503s, offline)
+    try {
+      const directJourneys = await searchConnectionsDirect({
+        from: params.from,
+        to: params.to,
+        departure: params.departureTime,
+        dTicketOnly: params.dTicketOnly,
+        includeFernverkehr: params.includeFernverkehr
+      });
+
+      if (directJourneys && directJourneys.length > 0) {
+        return { journeys: this.enhanceJourneys(directJourneys, params) };
+      }
+    } catch (err) {
+      console.warn('Direkte Verbindungssuche fehlgeschlagen:', err);
+    }
+
+    return {
+      journeys: [],
+      error: 'Für diese Strecke wurde keine passende Verbindung gefunden.'
+    };
   }
 
   async getStationDepartures(station: string): Promise<{ station: Station; departures: DepartureItem[]; error?: string }> {
+    // 1. Try server
     try {
-      const res = await fetch(`/api/departures?station=${encodeURIComponent(station)}`);
-      const contentType = res.headers.get('content-type') || '';
-      if (res.ok && contentType.includes('application/json')) {
+      const res = await fetch(`/api/departures?station=${encodeURIComponent(station)}`, { signal: AbortSignal.timeout(2500) });
+      if (res.ok) {
         const data = await res.json();
-        if (data && data.departures) {
+        if (data && data.station) {
           return { station: data.station, departures: data.departures || [] };
         }
       }
-    } catch (err) {
-      console.debug('API departures call fell back to local engine:', err);
+    } catch {
+      // Fall through
     }
 
-    // Resilient in-app fallback
+    // 2. Direct local engine
     try {
-      const result = await localGetStationDepartures(station);
-      return { station: result.station, departures: (result.departures || []) as unknown as DepartureItem[] };
+      const direct = await getStationDeparturesDirect(station);
+      return { station: direct.station, departures: direct.departures || [] };
     } catch {
       return {
         station: { id: '0', name: station },
@@ -411,39 +417,35 @@ export class TransitService {
       const url = bundesland
         ? `/api/destinations/from-hamburg?bundesland=${encodeURIComponent(bundesland)}`
         : '/api/destinations/from-hamburg';
-      const res = await fetch(url);
-      const contentType = res.headers.get('content-type') || '';
-      if (res.ok && contentType.includes('application/json')) {
+      const res = await fetch(url, { signal: AbortSignal.timeout(2000) });
+      if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data) && data.length > 0) return data;
       }
-    } catch (err) {
-      console.debug('API destinations call fell back to local catalog:', err);
+    } catch {
+      // Fall through
     }
 
-    // In-app fallback
     let items = REGIONAL_DESTINATIONS_FROM_HAMBURG;
     if (bundesland) {
       items = items.filter(d => d.bundesland.toLowerCase() === bundesland.toLowerCase());
     }
-    return items;
+    return items as RegionalGetaway[];
   }
 
   async getSurpriseDestinations(maxMinutes: number, category?: string): Promise<RegionalGetaway[]> {
     try {
       const queryParams = new URLSearchParams({ maxMinutes: String(maxMinutes) });
       if (category) queryParams.set('category', category);
-      const res = await fetch(`/api/surprise?${queryParams.toString()}`);
-      const contentType = res.headers.get('content-type') || '';
-      if (res.ok && contentType.includes('application/json')) {
+      const res = await fetch(`/api/surprise?${queryParams.toString()}`, { signal: AbortSignal.timeout(2000) });
+      if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data) && data.length > 0) return data;
       }
-    } catch (err) {
-      console.debug('API surprise call fell back to local ideas:', err);
+    } catch {
+      // Fall through
     }
 
-    // In-app fallback
     let candidates = REGIONAL_DESTINATIONS_FROM_HAMBURG.filter(d => d.durationMin <= maxMinutes);
     if (category && category !== 'all' && category !== 'beliebig') {
       candidates = candidates.filter(d => d.category.toLowerCase().includes(category.toLowerCase()));
@@ -452,7 +454,11 @@ export class TransitService {
       candidates = REGIONAL_DESTINATIONS_FROM_HAMBURG;
     }
     const shuffled = [...candidates].sort(() => 0.5 - Math.random());
-    return shuffled.slice(0, 4);
+    return shuffled.slice(0, 4) as RegionalGetaway[];
+  }
+
+  getBundeslaender() {
+    return BUNDESLAENDER_METADATA;
   }
 
   // Favorite Routes management
