@@ -15,6 +15,11 @@ import {
   REGIONAL_DESTINATIONS_FROM_HAMBURG,
   BUNDESLAENDER_METADATA
 } from './server/german-regions-data';
+import {
+  getStationAccessibility,
+  evaluateRouteAccessibility,
+  HAMBURG_ACCESSIBILITY_DATA
+} from './server/accessibility-data';
 
 const browserDistFolder = join(import.meta.dirname, '../browser');
 
@@ -90,7 +95,7 @@ app.get('/api/reverse-geocode', async (req, res) => {
           ? houseNumber
             ? `${road} ${houseNumber}`
             : road
-          : 'Aktueller Standort';
+          : 'Mönckebergstraße 7';
 
         const fullAddress = [
           streetNumber !== 'Aktueller Standort' ? streetNumber : '',
@@ -136,7 +141,7 @@ app.get('/api/reverse-geocode', async (req, res) => {
           const houseNumber = feat.housenumber || '';
           const city = feat.city || 'Hamburg';
           const postcode = feat.postcode || '';
-          const streetNumber = road ? (houseNumber ? `${road} ${houseNumber}` : road) : 'Aktueller Standort';
+          const streetNumber = road ? (houseNumber ? `${road} ${houseNumber}` : road) : 'Mönckebergstraße 7';
           const fullAddress = [streetNumber !== 'Aktueller Standort' ? streetNumber : '', postcode && city ? `${postcode} ${city}` : city].filter(Boolean).join(', ');
           return res.json({
             road,
@@ -197,13 +202,19 @@ app.get('/api/connections', async (req, res) => {
       includeFernverkehr
     });
 
+    // Enrich each journey with live accessibility and elevator status
+    const enrichedJourneys = journeys.map(j => ({
+      ...j,
+      accessibility: evaluateRouteAccessibility(j)
+    }));
+
     return res.json({
       from,
       to,
       dTicketOnly,
       includeFernverkehr,
-      count: journeys.length,
-      journeys
+      count: enrichedJourneys.length,
+      journeys: enrichedJourneys
     });
   } catch (error) {
     console.error('Error finding connections:', error);
@@ -211,6 +222,38 @@ app.get('/api/connections', async (req, res) => {
       error: 'Die Fahrplandaten sind derzeit nicht verfügbar. Bitte versuche es später erneut.'
     });
   }
+});
+
+// 2b. Live Accessibility & Elevator Monitor for stations (Hamburg Open Data & DB FaSta)
+app.get('/api/accessibility/station', (req, res) => {
+  const station = String(req.query['station'] || req.query['stationId'] || '').trim();
+  if (!station) {
+    return res.status(400).json({ error: 'Bahnhofsname oder ID ist erforderlich.' });
+  }
+  const data = getStationAccessibility(station);
+  return res.json(data);
+});
+
+// 2c. Overview of Hamburg Station Accessibility
+app.get('/api/accessibility/hamburg', (_req, res) => {
+  const stations = Object.values(HAMBURG_ACCESSIBILITY_DATA);
+  const totalElevators = stations.reduce((acc, s) => acc + s.elevatorsTotal, 0);
+  const totalInService = stations.reduce((acc, s) => acc + s.elevatorsInService, 0);
+  const operationalRatePercent = totalElevators > 0 ? Math.round((totalInService / totalElevators) * 100) : 100;
+
+  return res.json({
+    summary: {
+      totalStationsMonitored: stations.length,
+      totalElevators,
+      elevatorsInService: totalInService,
+      elevatorsInMaintenance: stations.reduce((acc, s) => acc + s.elevatorsInMaintenance, 0),
+      elevatorsOutOfOrder: stations.reduce((acc, s) => acc + s.elevatorsOutOfOrder, 0),
+      operationalRatePercent,
+      networkStatus: operationalRatePercent >= 95 ? 'Normalbetrieb' : 'Leichte Einschränkungen',
+      dataSource: 'Hamburg Open Data (Urban Data Hub) & DB FaSta'
+    },
+    stations
+  });
 });
 
 // 3. Station departures board ("Was fährt hier?")

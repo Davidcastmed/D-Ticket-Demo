@@ -10,9 +10,36 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
-import { Station, ConnectionJourney, TransitLeg, Stopover } from '../../models/transit.models';
+import { Station, ConnectionJourney, TransitLeg, Stopover, RouteAccessibilitySummary } from '../../models/transit.models';
 import { TransitService } from '../../services/transit.service';
+import { ALL_GERMAN_STATIONS } from '../../data/stations-data';
 import { StationInput } from '../../components/station-input/station-input';
+import { MapView } from '../../components/map/map-view';
+
+export interface NearbyStationDisplay extends Station {
+  distKm: number;
+  distanceText: string;
+  walkMinutes: number;
+}
+
+function calculatePreciseDistanceKm(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
 
 interface CuratedDestination {
   name: string;
@@ -30,7 +57,7 @@ interface CuratedDestination {
 @Component({
   selector: 'app-planner-view',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CommonModule, ReactiveFormsModule, StationInput],
+  imports: [CommonModule, ReactiveFormsModule, StationInput, MapView],
   template: `
     <div class="space-y-5">
       
@@ -60,12 +87,15 @@ interface CuratedDestination {
                   <app-station-input
                     [showLabel]="false"
                     label=""
-                    placeholder="Von (z.B. Aktueller Standort oder Hamburg Hbf)"
+                    placeholder="Von (Startbahnhof oder Haltestelle)"
                     iconName="trip_origin"
                     inputId="input-from-station"
                     [initialStation]="fromStation()"
                     [allowCurrentLocation]="true"
+                    [isCursorActive]="activeInput() === 'from'"
                     (stationChange)="onFromStationChange($event)"
+                    (queryChange)="fromStationQuery.set($event)"
+                    (inputFocus)="activeInput.set('from')"
                   ></app-station-input>
                 </div>
 
@@ -77,21 +107,73 @@ interface CuratedDestination {
                   <app-station-input
                     [showLabel]="false"
                     label=""
-                    placeholder="Nach (z.B. Lübeck Hbf, Sylt, Bremen)"
+                    placeholder="Nach (Zielbahnhof oder Ort)"
                     iconName="place"
                     inputId="input-to-station"
                     [initialStation]="toStation()"
                     [allowCurrentLocation]="false"
-                    (stationChange)="toStation.set($event)"
+                    [isCursorActive]="activeInput() === 'to'"
+                    (stationChange)="onToStationChange($event)"
+                    (queryChange)="toStationQuery.set($event)"
+                    (inputFocus)="activeInput.set('to')"
                   ></app-station-input>
                 </div>
 
-                <!-- DB-Style Floating Swap Button on the right side -->
+                <!-- 1rem Contenedor: Dein Standort (Aktueller Standort mit Straße & Hausnummer) + Karten-Icon mit Rückkehroption -->
+                <div class="mt-4 p-3 bg-white rounded-xl border border-[#E6DED6] hover:border-[#2D6A4F] flex items-center justify-between gap-3 transition-all shadow-2xs">
+                  
+                  <!-- Klickbereich: Überträgt den aktuellen Standort in 'Von' (Startbahnhof) -->
+                  <button
+                    type="button"
+                    id="btn-standort-to-origin"
+                    (click)="applyStandortToOrigin()"
+                    class="flex items-center gap-3 min-w-0 flex-1 text-left cursor-pointer group py-0.5"
+                    title="Aktuellen Standort als Startbahnhof (Von) übernehmen"
+                    aria-label="Deinen aktuellen Standort als Startbahnhof übernehmen"
+                  >
+                    <!-- Icono a la izquierda en una sola columna -->
+                    <div class="w-9 h-9 rounded-lg bg-[#EDF9F0] group-hover:bg-[#2D6A4F] text-[#2D6A4F] group-hover:text-white flex items-center justify-center shrink-0 transition-colors shadow-2xs" aria-hidden="true">
+                      @if (transitService.isLocating()) {
+                        <span class="mat-icon text-base animate-spin">sync</span>
+                      } @else {
+                        <span class="mat-icon text-lg">my_location</span>
+                      }
+                    </div>
+
+                    <!-- Dos filas: 1. Fija 'Dein Standort', 2. Letra 15% más pequeña y fino la calle y número -->
+                    <div class="min-w-0 truncate">
+                      <div class="text-[13px] font-bold text-[#1F1612] group-hover:text-[#1B4332] transition-colors">
+                        <span>Dein Standort</span>
+                      </div>
+                      <div class="text-[11px] font-light text-[#795548] truncate mt-0.5">
+                        @if (transitService.isLocating()) {
+                          <span class="text-[#2D6A4F] animate-pulse">Standort wird ermittelt...</span>
+                        } @else {
+                          <span>{{ currentStreetAndNumber() }}</span>
+                        }
+                      </div>
+                    </div>
+                  </button>
+
+                  <!-- Icono para visualizar en el mapa tu aktuelle standort, con opción a regresar -->
+                  <button
+                    type="button"
+                    id="btn-view-standort-map"
+                    (click)="openStandortMap()"
+                    class="w-9 h-9 rounded-lg bg-[#FAF7F2] hover:bg-[#EDF9F0] text-[#795548] hover:text-[#2D6A4F] border border-[#E6DED6] hover:border-[#2D6A4F] flex items-center justify-center cursor-pointer transition-all shrink-0 shadow-2xs"
+                    title="Standort auf Karte anzeigen"
+                    aria-label="Deinen aktuellen Standort auf der Karte visualisieren"
+                  >
+                    <span class="mat-icon text-lg" aria-hidden="true">map</span>
+                  </button>
+                </div>
+
+                <!-- DB-Style Floating Swap Button on the right side centered between from & to -->
                 <button
                   type="button"
                   id="btn-swap-stations"
                   (click)="swapStations()"
-                  class="absolute right-2.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white hover:bg-[#EFEBE6] text-[#4E342E] flex items-center justify-center cursor-pointer transition-all shadow-xs border border-[#D7CCC8] hover:border-[#1B4332] z-10"
+                  class="absolute right-2.5 top-[34px] -translate-y-1/2 w-8 h-8 rounded-full bg-white hover:bg-[#EFEBE6] text-[#4E342E] flex items-center justify-center cursor-pointer transition-all shadow-xs border border-[#D7CCC8] hover:border-[#1B4332] z-10"
                   title="Start und Ziel tauschen"
                   aria-label="Start- und Zielbahnhof tauschen"
                 >
@@ -138,7 +220,7 @@ interface CuratedDestination {
                 <button
                   type="submit"
                   id="btn-search-compact"
-                  [disabled]="isLoading() || !fromStation() || !toStation()"
+                  [disabled]="isLoading() || !toStation()"
                   class="w-full py-2.5 sm:py-3 bg-[#1B4332] hover:bg-[#132A1E] disabled:bg-[#EFEBE6] disabled:text-[#A1887F] disabled:cursor-not-allowed text-white font-black text-xs tracking-wider rounded-lg shadow-xs hover:shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer"
                   aria-label="Verbindung suchen"
                 >
@@ -674,7 +756,7 @@ interface CuratedDestination {
               <button
                 type="submit"
                 id="btn-search-connections"
-                [disabled]="isLoading() || !fromStation() || !toStation()"
+                [disabled]="isLoading() || !toStation()"
                 class="px-5 py-2 bg-[#1B4332] hover:bg-[#132A1E] disabled:bg-[#EFEBE6] disabled:text-[#A1887F] disabled:cursor-not-allowed text-white font-black text-xs tracking-wider rounded-lg shadow-xs hover:shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                 aria-label="Verbindungen suchen"
               >
@@ -691,12 +773,134 @@ interface CuratedDestination {
           </div>
         }
 
+            <!-- Pre-Search Information: In der Nähe: (4 Stationen) & Vorschläge: (Zuletzt gesuchte & beliebte Stationen) -->
+            <!-- Placed JUSTO ABAJO DE Verbindungen suchen, visible ONLY when both origin and destination inputs are empty -->
+            @if (areInputsEmpty()) {
+              <div id="container-presearch-suggestions" class="space-y-3.5 pt-3.5 mt-2 border-t border-[#EDE5DC] animate-in fade-in duration-150">
+                
+                <!-- Target indicator: Shows where clicked station will be inserted (cursor position) -->
+                <div class="flex items-center justify-between text-[11px] text-[#795548] px-0.5">
+                  <span class="font-medium flex items-center gap-1">
+                    <span class="mat-icon text-xs text-[#2D6A4F]" aria-hidden="true">ads_click</span>
+                    <span>Klick übernimmt Station in:</span>
+                  </span>
+                  <div class="inline-flex items-center gap-1 bg-[#FAF7F2] p-0.5 rounded-lg border border-[#E6DED6]">
+                    <button
+                      type="button"
+                      id="btn-switch-target-from"
+                      (click)="activeInput.set('from')"
+                      class="px-2.5 py-0.5 rounded-md text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1"
+                      [class.bg-[#1B4332]]="activeInput() === 'from'"
+                      [class.text-white]="activeInput() === 'from'"
+                      [class.text-[#795548]]="activeInput() !== 'from'"
+                      aria-label="Klick übernimmt in Startbahnhof Von"
+                    >
+                      <span>Von</span>
+                      @if (activeInput() === 'from') {
+                        <span class="text-[9px] opacity-80">(Cursor)</span>
+                      }
+                    </button>
+                    <button
+                      type="button"
+                      id="btn-switch-target-to"
+                      (click)="activeInput.set('to')"
+                      class="px-2.5 py-0.5 rounded-md text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1"
+                      [class.bg-[#1B4332]]="activeInput() === 'to'"
+                      [class.text-white]="activeInput() === 'to'"
+                      [class.text-[#795548]]="activeInput() !== 'to'"
+                      aria-label="Klick übernimmt in Zielbahnhof Nach"
+                    >
+                      <span>Nach</span>
+                      @if (activeInput() === 'to') {
+                        <span class="text-[9px] opacity-80">(Cursor)</span>
+                      }
+                    </button>
+                  </div>
+                </div>
+
+                <!-- 1. In der Nähe: (4 sugestiones esperando por si el usuario quiere ir a una de estas direcciones) -->
+                <div id="section-in-der-naehe" class="space-y-1.5">
+                  <div class="flex items-center justify-between">
+                    <h3 class="text-xs font-bold text-[#1F1612] flex items-center gap-1.5">
+                      <span class="mat-icon text-sm text-[#2D6A4F]" aria-hidden="true">near_me</span>
+                      <span>In der Nähe:</span>
+                    </h3>
+                    <span class="text-[10px] text-[#8D6E63] font-medium">4 nahe Stationen</span>
+                  </div>
+
+                  <!-- Contenedor con cuatro sugerencias -->
+                  <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                    @for (st of nearbyStations(); track st.id || st.name; let idx = $index) {
+                      <button
+                        type="button"
+                        [id]="'btn-nearby-station-' + idx"
+                        (click)="applySuggestionToActiveInput(st)"
+                        class="p-2.5 rounded-xl bg-white hover:bg-[#EDF9F0] border border-[#E6DED6] hover:border-[#2D6A4F] text-left transition-all group cursor-pointer shadow-2xs flex flex-col justify-between"
+                        [title]="st.name + ' in ' + (activeInput() === 'from' ? 'Von' : 'Nach') + ' übernehmen'"
+                        [attr.aria-label]="'Station In der Nähe: ' + st.name + ', Entfernung ' + st.distanceText"
+                      >
+                        <div class="flex items-start gap-1 min-w-0">
+                          <span class="mat-icon text-xs text-[#2D6A4F] shrink-0 mt-0.5" aria-hidden="true">place</span>
+                          <span class="text-xs font-bold text-[#1F1612] group-hover:text-[#1B4332] line-clamp-2 leading-tight">
+                            {{ st.name }}
+                          </span>
+                        </div>
+                        <div class="flex items-center justify-between gap-1 text-[10px] font-medium text-[#795548] mt-2 pt-1 border-t border-[#F0EAE1]">
+                          <span class="font-semibold text-[#2D6A4F] truncate">{{ st.distanceText }}</span>
+                          @if (st.walkMinutes) {
+                            <span class="text-[#8D6E63] shrink-0">~{{ st.walkMinutes }}m</span>
+                          }
+                        </div>
+                      </button>
+                    }
+                  </div>
+                </div>
+
+                <!-- 2. Vorschläge: (inteligentes seleccionadas de las últimas que ha buscado el usuario) -->
+                <div id="section-vorschlaege" class="space-y-1.5 pt-1">
+                  <div class="flex items-center justify-between">
+                    <h3 class="text-xs font-bold text-[#1F1612] flex items-center gap-1.5">
+                      <span class="mat-icon text-sm text-[#795548]" aria-hidden="true">history</span>
+                      <span>Vorschläge:</span>
+                    </h3>
+                    <span class="text-[10px] text-[#8D6E63] font-medium">Letzte Suchen & Favoriten</span>
+                  </div>
+
+                  <!-- Contenedor con cuatro sugerencias -->
+                  <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                    @for (st of smartVorschlaege(); track st.id || st.name; let idx = $index) {
+                      <button
+                        type="button"
+                        [id]="'btn-vorschlag-station-' + idx"
+                        (click)="applySuggestionToActiveInput(st)"
+                        class="p-2.5 rounded-xl bg-[#FAF7F2] hover:bg-[#EDF9F0] border border-[#E6DED6] hover:border-[#2D6A4F] text-left transition-all group cursor-pointer shadow-2xs flex flex-col justify-between"
+                        [title]="st.name + ' in ' + (activeInput() === 'from' ? 'Von' : 'Nach') + ' übernehmen'"
+                        [attr.aria-label]="'Vorschlag: ' + st.name"
+                      >
+                        <div class="flex items-start gap-1 min-w-0">
+                          <span class="mat-icon text-xs text-[#795548] group-hover:text-[#2D6A4F] shrink-0 mt-0.5" aria-hidden="true">train</span>
+                          <span class="text-xs font-bold text-[#1F1612] group-hover:text-[#1B4332] line-clamp-2 leading-tight">
+                            {{ st.name }}
+                          </span>
+                        </div>
+                        <div class="flex items-center justify-between text-[10px] font-medium text-[#8D6E63] mt-2 pt-1 border-t border-[#F0EAE1]">
+                          <span class="truncate">Schnellauswahl</span>
+                          <span class="mat-icon text-xs text-[#8D6E63] group-hover:text-[#2D6A4F] shrink-0" aria-hidden="true">arrow_forward</span>
+                        </div>
+                      </button>
+                    }
+                  </div>
+                </div>
+
+              </div>
+            }
+
           </form>
 
         </div>
 
         <!-- SEARCH RESULTS SECTION: Placed directly below the search parameters in the main column, aligned so top badge touches the bottom edge of the top search card -->
-        @if (hasSearched() || isLoading()) {
+        @if (!areInputsEmpty() && (hasSearched() || isLoading())) {
           <div id="search-results-section" class="space-y-4 scroll-mt-6 animate-in fade-in duration-200 -mt-1.5">
             
             <!-- Loading Skeleton / Status -->
@@ -731,7 +935,7 @@ interface CuratedDestination {
                 <!-- Subtitle: Origin → Destination -->
                 <div class="flex items-center gap-2 min-w-0 pt-0.5">
                   <span class="text-xs text-[#795548] font-semibold truncate">
-                    {{ fromStation()?.name }} → {{ toStation()?.name }}
+                    {{ fromStation()?.name || 'Aktueller Standort' }} → {{ toStation()?.name }}
                   </span>
                 </div>
 
@@ -939,6 +1143,80 @@ interface CuratedDestination {
                       </div>
 
                     </div>
+
+                    <!-- Live Accessibility Status (Hamburg Urban Data & DB FaSta) -->
+                    @if (journey.accessibility) {
+                      @let acc = journey.accessibility;
+                      @let isAccExpanded = expandedAccessibilityJourneyId() === journey.id;
+                      <div class="pt-1.5 border-t border-[#F0EAE1] space-y-1.5">
+                        <div class="flex items-center justify-between gap-2 flex-wrap text-[11px]">
+                          <div class="flex items-center gap-1.5 flex-wrap">
+                            @if (acc.statusType === 'warning') {
+                              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-[#FFF3E0] text-[#E65100] border border-[#FFE0B2]" title="Aufzugsstörung auf dieser Fahrtstrecke gemeldet">
+                                <span class="mat-icon text-[11px]">warning</span>
+                                <span>{{ acc.badgeLabel }}</span>
+                              </span>
+                            } @else {
+                              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#EDF9F0] text-[#1B4332] border border-[#B7E4C7]" title="Stufenfreie Fahrtverbindung">
+                                <span class="mat-icon text-[11px] text-[#2D6A4F]">accessible</span>
+                                <span>{{ acc.badgeLabel }}</span>
+                              </span>
+                            }
+
+                            @if (acc.stationNotes && acc.stationNotes.length > 0) {
+                              @let disruptedNote = getFirstDisruptionNote(acc);
+                              @if (disruptedNote) {
+                                <span class="text-[10px] text-[#E65100] font-medium truncate max-w-[200px] sm:max-w-xs">
+                                  {{ disruptedNote }}
+                                </span>
+                              }
+                            }
+                          </div>
+
+                          <button
+                            type="button"
+                            (click)="toggleAccessibilityExpand(journey.id, $event)"
+                            class="inline-flex items-center gap-0.5 text-[10px] font-bold text-[#2D6A4F] hover:text-[#1B4332] bg-[#FAF7F2] hover:bg-[#EDF9F0] px-2 py-0.5 rounded-md border border-[#E6DED6] cursor-pointer transition-colors shadow-2xs"
+                            title="Stationen & Aufzüge auf dieser Verbindung prüfen"
+                            [attr.aria-expanded]="isAccExpanded"
+                          >
+                            <span class="mat-icon text-[11px]">elevator</span>
+                            <span>{{ isAccExpanded ? 'Aufzüge ausblenden' : 'Aufzüge & Barrierefreiheit' }}</span>
+                            <span class="mat-icon text-[10px] transition-transform" [class.rotate-180]="isAccExpanded">expand_more</span>
+                          </button>
+                        </div>
+
+                        <!-- Expandable station-by-station didactic breakdown -->
+                        @if (isAccExpanded) {
+                          <div class="bg-[#FAF7F2] rounded-xl p-2.5 border border-[#E6DED6] text-xs space-y-1.5 animate-in fade-in duration-150">
+                            <div class="flex items-center justify-between text-[10px] font-bold text-[#795548] uppercase tracking-wider pb-1 border-b border-[#EDE5DC]">
+                              <span>Stationen & Aufzugssituation (Live)</span>
+                              <button
+                                type="button"
+                                (click)="openAccessibilityMonitor($event)"
+                                class="text-[#2D6A4F] hover:underline font-bold capitalize cursor-pointer flex items-center gap-0.5"
+                              >
+                                <span>Gesamter Monitor</span>
+                                <span class="mat-icon text-[10px]">open_in_new</span>
+                              </button>
+                            </div>
+                            <div class="space-y-1">
+                              @for (sn of acc.stationNotes; track sn.stationName) {
+                                <div class="flex items-start justify-between gap-1.5 text-[11px]">
+                                  <div class="flex items-center gap-1 min-w-0">
+                                    <span class="mat-icon text-xs" [class.text-[#E65100]]="sn.hasDisruption" [class.text-[#2D6A4F]]="!sn.hasDisruption">
+                                      {{ sn.hasDisruption ? 'warning' : 'check_circle' }}
+                                    </span>
+                                    <span class="font-bold text-[#1F1612] truncate">{{ sn.stationName }}:</span>
+                                    <span class="text-[#795548] truncate">{{ sn.note }}</span>
+                                  </div>
+                                </div>
+                              }
+                            </div>
+                          </div>
+                        }
+                      </div>
+                    }
 
                     <!-- Bottom Recommendation & Trigger Action for details -->
                     <div class="flex items-center justify-between text-[11px] pt-1 text-[#795548] border-t border-[#F5EFE6]">
@@ -1243,7 +1521,7 @@ interface CuratedDestination {
       </div>
 
       <!-- SECONDARY ACTION MODULES GRID -->
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
         
         <!-- Tile 1: Live Board -->
         <button
@@ -1305,6 +1583,26 @@ interface CuratedDestination {
           </div>
         </button>
 
+        <!-- Tile 4: Live Accessibility Monitor -->
+        <button
+          type="button"
+          id="tile-nav-accessibility"
+          (click)="switchTab.emit('accessibility')"
+          class="bg-white rounded-3xl p-6 border border-[#E6DED6] hover:border-[#2D6A4F] hover:shadow-sm text-left transition-all cursor-pointer group flex flex-col justify-between space-y-4"
+          aria-label="Zum Live-Barrierefreiheits- und Aufzugsmonitor wechseln"
+        >
+          <div class="flex items-center justify-between">
+            <span class="w-10 h-10 rounded-2xl bg-[#EDF9F0] text-[#1B4332] flex items-center justify-center font-bold" aria-hidden="true">
+              <span class="mat-icon text-xl">accessible</span>
+            </span>
+            <span class="mat-icon text-[#8D6E63] group-hover:text-[#2D6A4F] group-hover:translate-x-0.5 transition-all text-sm" aria-hidden="true">arrow_forward</span>
+          </div>
+          <div>
+            <h3 class="text-base font-black text-[#1F1612]">Barrierefreiheit & Aufzüge</h3>
+            <p class="text-xs text-[#795548] mt-1">Live-Status aller Aufzüge & stufenfreien Stationen im Verkehrsnetz</p>
+          </div>
+        </button>
+
       </div>
 
       <!-- Minimalist D-Ticket Information Footer Banner -->
@@ -1334,26 +1632,103 @@ interface CuratedDestination {
         </div>
       </div>
 
+      <!-- Modal: Aktueller Standort auf der Karte mit Option zum Zurückkehren -->
+      @if (showStandortMap()) {
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto" role="dialog" aria-modal="true" aria-label="Aktueller Standort auf Karte">
+          <button
+            type="button"
+            class="fixed inset-0 bg-black/45 backdrop-blur-[2px] transition-opacity animate-in fade-in duration-150 w-full h-full border-none cursor-default"
+            (click)="closeStandortMap()"
+            aria-label="Karte schließen"
+          ></button>
+          
+          <div class="relative w-full max-w-xl bg-white border border-[#D7CCC8] rounded-2xl shadow-2xl p-4 sm:p-5 z-10 animate-in fade-in zoom-in-95 duration-150 space-y-3.5 my-auto">
+            <!-- Header mit Option zum Zurückkehren -->
+            <div class="flex items-center justify-between pb-2.5 border-b border-[#EFEBE6]">
+              <button
+                type="button"
+                id="btn-back-from-standort-map"
+                (click)="closeStandortMap()"
+                class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#FAF7F2] hover:bg-[#EFEBE6] text-[#2E1F18] text-xs font-bold border border-[#D7CCC8] cursor-pointer transition-colors"
+                title="Zurück zur Suche"
+                aria-label="Zurück zur Verbindungssuche"
+              >
+                <span class="mat-icon text-sm text-[#2D6A4F]" aria-hidden="true">arrow_back</span>
+                <span>Zurück</span>
+              </button>
+
+              <div class="text-xs font-black text-[#1F1612] flex items-center gap-1.5">
+                <span class="mat-icon text-sm text-[#2D6A4F]">my_location</span>
+                <span>Aktueller Standort</span>
+              </div>
+            </div>
+
+            <!-- Interaktive Karte -->
+            <div class="h-64 sm:h-72 w-full rounded-xl overflow-hidden border border-[#E6DED6]">
+              <app-map-view
+                [selectedStation]="standortMapStation()"
+              ></app-map-view>
+            </div>
+
+            <!-- Footer: Straße, Hausnummer und Übernahme-Aktion -->
+            <div class="pt-1 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div class="min-w-0">
+                <div class="text-xs font-bold text-[#1F1612] flex items-center gap-1">
+                  <span class="mat-icon text-xs text-[#2D6A4F]">place</span>
+                  <span>{{ currentStreetAndNumber() }}</span>
+                </div>
+                <div class="text-[11px] text-[#795548] truncate">{{ transitService.userAddress() || 'Hamburg' }}</div>
+              </div>
+
+              <div class="flex items-center gap-2">
+                <button
+                  type="button"
+                  (click)="closeStandortMap()"
+                  class="px-3 py-2 bg-[#FAF7F2] hover:bg-[#EFEBE6] text-[#4E342E] text-xs font-bold rounded-lg border border-[#D7CCC8] cursor-pointer transition-colors"
+                >
+                  Zurück
+                </button>
+                <button
+                  type="button"
+                  id="btn-confirm-standort-origin"
+                  (click)="applyStandortToOrigin(); closeStandortMap()"
+                  class="px-4 py-2 bg-[#1B4332] hover:bg-[#132A1E] text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs transition-colors whitespace-nowrap"
+                >
+                  <span class="mat-icon text-sm">trip_origin</span>
+                  <span>In 'Von' übernehmen</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      }
+
     </div>
   `
 })
 export class PlannerView implements OnInit {
   @Output() showOnMap = new EventEmitter<ConnectionJourney>();
+  @Output() showStationOnMap = new EventEmitter<Station>();
   @Output() viewDetail = new EventEmitter<ConnectionJourney>();
-  @Output() switchTab = new EventEmitter<'planner' | 'live-board' | 'hamburg-hub' | 'surprise' | 'favorites'>();
+  @Output() switchTab = new EventEmitter<'planner' | 'live-board' | 'hamburg-hub' | 'surprise' | 'favorites' | 'accessibility'>();
 
   private fb = inject(FormBuilder);
   readonly transitService = inject(TransitService);
 
-  readonly fromStation = signal<Station | null>({
-    id: '8002549',
-    name: 'Hamburg Hbf',
-    location: { latitude: 53.552736, longitude: 10.006909 }
-  });
-  readonly toStation = signal<Station | null>({
-    id: '8000237',
-    name: 'Lübeck Hbf',
-    location: { latitude: 53.867208, longitude: 10.669862 }
+  readonly activeInput = signal<'from' | 'to'>('from');
+  readonly showStandortMap = signal<boolean>(false);
+
+  readonly expandedAccessibilityJourneyId = signal<string | null>(null);
+
+  readonly fromStation = signal<Station | null>(null);
+  readonly toStation = signal<Station | null>(null);
+  readonly fromStationQuery = signal<string>('');
+  readonly toStationQuery = signal<string>('');
+
+  readonly areInputsEmpty = computed(() => {
+    const noFrom = !this.fromStation() && !this.fromStationQuery().trim();
+    const noTo = !this.toStation() && !this.toStationQuery().trim();
+    return noFrom && noTo;
   });
 
   readonly journeys = signal<ConnectionJourney[]>([]);
@@ -1762,8 +2137,209 @@ export class PlannerView implements OnInit {
     return list;
   });
 
+  readonly currentStreetAndNumber = computed<string>(() => {
+    const streetNum = this.transitService.userStreetNumber();
+    if (streetNum && streetNum !== 'Aktueller Standort' && streetNum !== 'Hamburg Hbf') {
+      const firstPart = streetNum.split(',')[0].trim();
+      return firstPart.replace(/\b\d{5}\b.*$/, '').trim();
+    }
+    const addr = this.transitService.userAddress();
+    if (addr && addr !== 'Aktueller Standort') {
+      const parts = addr.split(',');
+      if (parts.length > 0 && parts[0].trim()) {
+        const firstPart = parts[0].trim();
+        return firstPart.replace(/\b\d{5}\b.*$/, '').trim();
+      }
+    }
+    return 'Mönckebergstraße 7';
+  });
+
+  readonly standortMapStation = computed<Station>(() => {
+    const loc = this.transitService.userLocation() || { latitude: 53.552736, longitude: 10.006909 };
+    return {
+      id: 'current-location',
+      name: `Dein Standort (${this.currentStreetAndNumber()})`,
+      isCurrentLocation: true,
+      location: loc
+    };
+  });
+
+  readonly nearbyStations = computed<NearbyStationDisplay[]>(() => {
+    const loc = this.transitService.userLocation() || { latitude: 53.552736, longitude: 10.006909 };
+    const list: NearbyStationDisplay[] = [];
+
+    for (const s of ALL_GERMAN_STATIONS) {
+      if (
+        !s.location ||
+        s.isCurrentLocation ||
+        s.id === 'current-location' ||
+        s.name.toLowerCase().includes('standort') ||
+        s.name.toLowerCase().includes('location')
+      ) {
+        continue;
+      }
+      const distKm = calculatePreciseDistanceKm(
+        loc.latitude,
+        loc.longitude,
+        s.location.latitude,
+        s.location.longitude
+      );
+      const meters = Math.round(distKm * 1000);
+      const distText = meters < 1000 ? `${meters} m` : `${distKm.toFixed(1)} km`;
+      const walkMin = Math.max(2, Math.round(meters / 80));
+
+      list.push({
+        id: s.id,
+        name: s.name,
+        location: s.location,
+        distKm,
+        distanceText: distText,
+        walkMinutes: walkMin
+      });
+    }
+
+    list.sort((a, b) => a.distKm - b.distKm);
+    return list.slice(0, 4);
+  });
+
+  readonly smartVorschlaege = computed<Station[]>(() => {
+    const recent = this.transitService.recentStations() || [];
+    const nearbyNames = new Set(this.nearbyStations().map(s => s.name.toLowerCase()));
+    const fromName = this.fromStation()?.name?.toLowerCase();
+    const toName = this.toStation()?.name?.toLowerCase();
+
+    const cleanRecent: Station[] = [];
+    for (const s of recent) {
+      if (!s || !s.name) continue;
+      const nLower = s.name.toLowerCase();
+      if (
+        s.isCurrentLocation ||
+        s.id === 'current-location' ||
+        nLower.includes('standort') ||
+        nLower.includes('location') ||
+        nearbyNames.has(nLower) ||
+        (fromName && nLower === fromName) ||
+        (toName && nLower === toName)
+      ) {
+        continue;
+      }
+      if (!cleanRecent.some(x => x.name.toLowerCase() === nLower)) {
+        cleanRecent.push({
+          id: s.id,
+          name: s.name,
+          location: s.location
+        });
+      }
+    }
+
+    const fallbackCandidates: Station[] = [
+      { id: '8000237', name: 'Lübeck Hbf' },
+      { id: '8000199', name: 'Kiel Hbf' },
+      { id: '8000050', name: 'Bremen Hbf' },
+      { id: '8006385', name: 'Westerland (Sylt)' },
+      { id: '8010304', name: 'Rostock Hbf' },
+      { id: '8000152', name: 'Hannover Hbf' },
+      { id: '8010324', name: 'Schwerin Hbf' },
+      { id: '8000244', name: 'Lüneburg' }
+    ];
+
+    const result: Station[] = [...cleanRecent];
+    for (const candidate of fallbackCandidates) {
+      if (result.length >= 4) break;
+      const cLower = candidate.name.toLowerCase();
+      const inResult = result.some(r => r.name.toLowerCase() === cLower);
+      const inNearby = nearbyNames.has(cLower);
+      const isSelected = (fromName && cLower === fromName) || (toName && cLower === toName);
+
+      if (!inResult && !inNearby && !isSelected) {
+        result.push(candidate);
+      }
+    }
+
+    return result.slice(0, 4);
+  });
+
+  applySuggestionToActiveInput(station: Station) {
+    const target = this.activeInput();
+    if (target === 'from') {
+      this.fromStation.set(station);
+      this.fromStationQuery.set(station.name);
+      this.transitService.recordRecentStation(station);
+      this.activeInput.set('to');
+      if (typeof document !== 'undefined') {
+        setTimeout(() => {
+          const el = document.getElementById('input-to-station') as HTMLInputElement;
+          if (el) {
+            el.focus();
+          }
+        }, 40);
+      }
+    } else {
+      this.toStation.set(station);
+      this.toStationQuery.set(station.name);
+      this.transitService.recordRecentStation(station);
+      if (typeof document !== 'undefined') {
+        setTimeout(() => {
+          const el = document.getElementById('input-to-station') as HTMLInputElement;
+          if (el) {
+            el.focus();
+          }
+        }, 40);
+      }
+    }
+  }
+
   ngOnInit() {
-    this.onSearchSubmit();
+    this.transitService.startActiveTracking();
+  }
+
+  async applyStandortToOrigin() {
+    this.transitService.startActiveTracking();
+    let loc = this.transitService.userLocation();
+
+    // If there is no acquired position yet, actively search/request geolocation
+    if (!loc || !this.transitService.isRealGpsAcquired()) {
+      try {
+        loc = await this.transitService.requestGeolocation(true);
+      } catch (err) {
+        console.warn('Fehler bei der Standortermittlung:', err);
+      }
+    }
+
+    if (loc) {
+      try {
+        await this.transitService.fetchReverseGeocode(loc.latitude, loc.longitude);
+      } catch {
+        // Handled in transitService
+      }
+    }
+
+    const streetAndNumber = this.currentStreetAndNumber();
+
+    this.fromStation.set({
+      id: 'current-location',
+      name: streetAndNumber,
+      isCurrentLocation: true,
+      location: loc || undefined
+    });
+    this.fromStationQuery.set(streetAndNumber);
+  }
+
+  openStandortMap() {
+    this.showStandortMap.set(true);
+    const loc = this.transitService.userLocation() || { latitude: 53.552736, longitude: 10.006909 };
+    const street = this.currentStreetAndNumber();
+    const st: Station = {
+      id: 'current-location',
+      name: `Dein Standort (${street})`,
+      isCurrentLocation: true,
+      location: loc
+    };
+    this.showStationOnMap.emit(st);
+  }
+
+  closeStandortMap() {
+    this.showStandortMap.set(false);
   }
 
   getCurrentDateString(): string {
@@ -2020,14 +2596,33 @@ export class PlannerView implements OnInit {
 
   onFromStationChange(station: Station | null) {
     this.fromStation.set(station);
-    if (station && this.toStation()) {
-      this.onSearchSubmit();
+    if (station) {
+      this.fromStationQuery.set(station.name);
+    } else {
+      this.fromStationQuery.set('');
+    }
+  }
+
+  onToStationChange(station: Station | null) {
+    this.toStation.set(station);
+    if (station) {
+      this.toStationQuery.set(station.name);
+    } else {
+      this.toStationQuery.set('');
     }
   }
 
   async onSearchSubmit() {
-    const from = this.fromStation();
+    let from = this.fromStation();
     const to = this.toStation();
+
+    // If 'from' has not been explicitly chosen (still placeholder 'Aktueller Standort'),
+    // automatically activate current location!
+    if (!from) {
+      await this.applyStandortToOrigin();
+      from = this.fromStation();
+    }
+
     if (!from || !to) return;
 
     this.isLoading.set(true);
@@ -2068,6 +2663,12 @@ export class PlannerView implements OnInit {
     this.isLoading.set(false);
     this.hasSearched.set(true);
     this.journeys.set(res.journeys);
+
+    // Intelligently save searched stations to recent searches
+    this.transitService.recordRecentStation(to);
+    if (!isFromCurrentLocation && from) {
+      this.transitService.recordRecentStation(from);
+    }
 
     if (res.error && res.journeys.length === 0) {
       this.errorMessage.set(res.error);
@@ -2147,6 +2748,26 @@ export class PlannerView implements OnInit {
 
   openJourneyDetail(journey: ConnectionJourney) {
     this.viewDetail.emit(journey);
+  }
+
+  toggleAccessibilityExpand(journeyId: string, event?: Event) {
+    if (event) {
+      event.stopPropagation();
+    }
+    this.expandedAccessibilityJourneyId.update(curr => (curr === journeyId ? null : journeyId));
+  }
+
+  getFirstDisruptionNote(acc: RouteAccessibilitySummary): string {
+    if (!acc.stationNotes || acc.stationNotes.length === 0) return '';
+    const disrupted = acc.stationNotes.find(n => n.hasDisruption);
+    return disrupted ? `${disrupted.stationName}: ${disrupted.note}` : '';
+  }
+
+  openAccessibilityMonitor(event?: Event) {
+    if (event) {
+      event.stopPropagation();
+    }
+    this.switchTab.emit('accessibility');
   }
 
   toggleExpandJourney(journeyId: string) {
@@ -2533,10 +3154,12 @@ export class PlannerView implements OnInit {
     return this.transitService.isFavoriteRoute(journey.origin.name, journey.destination.name);
   }
 
-  setFromAndTo(from: Station, to: Station) {
+  setFromAndTo(from: Station, to?: Station) {
     this.fromStation.set(from);
-    this.toStation.set(to);
-    this.onSearchSubmit();
+    if (to) {
+      this.toStation.set(to);
+      this.onSearchSubmit();
+    }
   }
 
   continueJourneyFromTransfer(transferStation: Station) {

@@ -14,6 +14,7 @@ import { LiveBoardView } from './views/live-board/live-board-view';
 import { HamburgHubView } from './views/hamburg-hub/hamburg-hub-view';
 import { SurpriseView } from './views/surprise/surprise-view';
 import { FavoritesView } from './views/favorites/favorites-view';
+import { AccessibilityView } from './views/accessibility/accessibility-view';
 import { MapView } from './components/map/map-view';
 import { JourneyDetail } from './components/journey-detail/journey-detail';
 import { PwaInstallModal } from './components/pwa-install/pwa-install';
@@ -28,6 +29,7 @@ import { PwaInstallModal } from './components/pwa-install/pwa-install';
     HamburgHubView,
     SurpriseView,
     FavoritesView,
+    AccessibilityView,
     MapView,
     JourneyDetail,
     PwaInstallModal
@@ -53,7 +55,7 @@ export class App {
 
   isExtraTabActive(): boolean {
     const tab = this.currentTab();
-    return tab === 'favorites' || tab === 'hamburg-hub' || tab === 'surprise';
+    return tab === 'favorites' || tab === 'hamburg-hub' || tab === 'surprise' || tab === 'accessibility';
   }
 
   getExtraTabLabel(): string {
@@ -61,6 +63,7 @@ export class App {
     if (tab === 'favorites') return 'Favoriten';
     if (tab === 'hamburg-hub') return 'Regionalnetz';
     if (tab === 'surprise') return 'Ausflugsplaner';
+    if (tab === 'accessibility') return 'Barrierefreiheit';
     return 'Mehr';
   }
 
@@ -69,6 +72,7 @@ export class App {
     if (tab === 'favorites') return 'star';
     if (tab === 'hamburg-hub') return 'anchor';
     if (tab === 'surprise') return 'shuffle';
+    if (tab === 'accessibility') return 'accessible';
     return 'menu';
   }
 
@@ -77,7 +81,7 @@ export class App {
   readonly mapActiveJourney = signal<ConnectionJourney | null>(null);
   readonly mapSelectedStation = signal<Station | null>(null);
 
-  setTab(tab: 'planner' | 'live-board' | 'hamburg-hub' | 'surprise' | 'favorites') {
+  setTab(tab: 'planner' | 'live-board' | 'hamburg-hub' | 'surprise' | 'favorites' | 'accessibility') {
     this.transitService.activeTab.set(tab);
   }
 
@@ -97,7 +101,7 @@ export class App {
     this.inspectJourney.set(journey);
   }
 
-  onNavigateToPlanner(event: { from: Station; to: Station }) {
+  onNavigateToPlanner(event: { from: Station; to?: Station }) {
     this.transitService.activeTab.set('planner');
     setTimeout(() => {
       if (this.plannerViewComponent) {

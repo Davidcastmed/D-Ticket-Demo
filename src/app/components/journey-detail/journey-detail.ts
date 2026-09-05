@@ -213,6 +213,73 @@ export interface EnrichedStopover {
                 </span>
               </div>
 
+              <!-- DIDACTIC LIVE ACCESSIBILITY & ELEVATOR MONITOR ON ROUTE -->
+              @if (journey.accessibility) {
+                @let acc = journey.accessibility;
+                <div class="bg-white rounded-2xl p-3.5 sm:p-5 border border-[#E6DED6] shadow-xs space-y-3" role="region" aria-label="Barrierefreiheit auf dieser Route">
+                  <div class="flex items-center justify-between pb-2.5 border-b border-[#EDE5DC] flex-wrap gap-2">
+                    <div class="flex items-center gap-2">
+                      <span class="w-7 h-7 rounded-lg bg-[#EDF9F0] text-[#1B4332] flex items-center justify-center font-bold">
+                        <span class="mat-icon text-base">accessible</span>
+                      </span>
+                      <div>
+                        <h2 class="text-xs sm:text-sm font-black text-[#1F1612]">
+                          Barrierefreiheit & Aufzugs-Status auf dieser Route
+                        </h2>
+                        <div class="text-[10px] text-[#795548] font-semibold">
+                          Live-Daten der Bahnhöfe & Umstiegsstationen (Hamburg Open Data / DB FaSta)
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                      @if (acc.statusType === 'warning') {
+                        <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black bg-[#FFF3E0] text-[#E65100] border border-[#FFE0B2]">
+                          <span class="mat-icon text-sm">warning</span>
+                          <span>{{ acc.badgeLabel }}</span>
+                        </span>
+                      } @else {
+                        <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black bg-[#EDF9F0] text-[#1B4332] border border-[#B7E4C7]">
+                          <span class="mat-icon text-sm text-[#2D6A4F]">verified</span>
+                          <span>{{ acc.badgeLabel }}</span>
+                        </span>
+                      }
+                    </div>
+                  </div>
+
+                  <!-- Stations list with step-free breakdown -->
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                    @for (note of acc.stationNotes; track note.stationName) {
+                      <div
+                        class="p-2.5 rounded-xl border text-xs space-y-1"
+                        [class.bg-[#FFF8E1]]="note.hasDisruption"
+                        [class.border-[#FFE082]]="note.hasDisruption"
+                        [class.bg-[#FAF7F2]]="!note.hasDisruption"
+                        [class.border-[#E6DED6]]="!note.hasDisruption"
+                      >
+                        <div class="flex items-center justify-between gap-1.5 font-bold">
+                          <span class="text-[#1F1612] truncate">{{ note.stationName }}</span>
+                          @if (note.hasDisruption) {
+                            <span class="inline-flex items-center gap-0.5 text-[10px] text-[#E65100] shrink-0 font-black">
+                              <span class="mat-icon text-[11px]">warning</span>
+                              <span>Störung</span>
+                            </span>
+                          } @else if (note.isStepFree) {
+                            <span class="inline-flex items-center gap-0.5 text-[10px] text-[#1B4332] shrink-0 font-bold">
+                              <span class="mat-icon text-[11px] text-[#2D6A4F]">check_circle</span>
+                              <span>Stufenfrei</span>
+                            </span>
+                          }
+                        </div>
+                        <div class="text-[11px] text-[#795548] leading-relaxed">
+                          {{ note.note }}
+                        </div>
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
+
               <!-- REISEVERLAUF & INTERMEDIATE STATIONS WITH REAL-TIME COLOR DISTINCTION -->
               <div class="bg-white rounded-2xl p-3.5 sm:p-5 border border-[#E6DED6] shadow-xs space-y-4" role="region" aria-label="Reiseverlauf und Haltestellen">
                 

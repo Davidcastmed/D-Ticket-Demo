@@ -69,8 +69,13 @@ export interface EnrichedStationItem extends Station {
 
       <div class="relative flex items-center">
         @if (iconName && !showLabel) {
-          <span class="absolute left-3.5 text-[#795548] flex items-center pointer-events-none z-10" aria-hidden="true">
-            <span class="mat-icon text-base">{{ iconName }}</span>
+          <span
+            class="absolute left-3.5 flex items-center pointer-events-none z-10 transition-colors"
+            [class.text-[#2D6A4F]]="selectedStation()?.isCurrentLocation"
+            [class.text-[#795548]]="!selectedStation()?.isCurrentLocation"
+            aria-hidden="true"
+          >
+            <span class="mat-icon text-base">{{ selectedStation()?.isCurrentLocation ? 'my_location' : iconName }}</span>
           </span>
         }
         <input
@@ -89,12 +94,16 @@ export interface EnrichedStationItem extends Station {
           autocomplete="off"
           [class.pl-10]="iconName && !showLabel"
           [class.pl-3.5]="!iconName || showLabel"
-          class="w-full pr-16 py-3 bg-[#FAF7F2] border border-[#D7CCC8] rounded-xl text-[#2E1F18] placeholder-[#8D6E63] text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]/30 focus:border-[#2D6A4F] focus:bg-white transition-all shadow-xs"
+          [class.border-[#2D6A4F]]="isCursorActive"
+          [class.ring-2]="isCursorActive"
+          [class.ring-[#2D6A4F]/25]="isCursorActive"
+          [class.bg-white]="isCursorActive"
+          class="w-full pr-20 py-3 bg-[#FAF7F2] border border-[#D7CCC8] rounded-xl text-[#2E1F18] placeholder-[#8D6E63] text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]/30 focus:border-[#2D6A4F] focus:bg-white transition-all shadow-xs"
         />
 
         <div class="absolute right-2 flex items-center gap-1 z-10">
-          @if (isSearching() || transitService.isLocating()) {
-            <span class="mat-icon animate-spin text-sm text-[#2D6A4F] mr-1" aria-hidden="true">sync</span>
+          @if (isSearching()) {
+            <span class="mat-icon animate-spin text-sm text-[#2D6A4F] mr-0.5" title="Stationen werden gesucht..." aria-hidden="true">sync</span>
           }
 
           @if (searchQuery()) {
@@ -111,114 +120,34 @@ export interface EnrichedStationItem extends Station {
         </div>
       </div>
 
-      <!-- Autocomplete Suggestions Dropdown -->
-      @if (isOpen()) {
+      @if (selectedStation()?.isCurrentLocation) {
+        <div class="mt-1 flex items-center justify-between text-[11px] px-1 text-[#2D6A4F]">
+          <span class="flex items-center gap-1 truncate font-medium">
+            <span class="mat-icon text-xs">navigation</span>
+            <span class="truncate">{{ transitService.userAddress() || 'GPS aktiv • Fußweg zum nächsten Bahnhof' }}</span>
+          </span>
+          @if (transitService.isLocating()) {
+            <span class="shrink-0 text-[10px] text-[#2D6A4F] animate-pulse">GPS ermittelt...</span>
+          }
+        </div>
+      }
+
+      <!-- Autocomplete Suggestions Dropdown: Only shown when at least 2 characters are typed -->
+      @if (isOpen() && searchQuery().trim().length >= 2) {
         <div
           [id]="inputId + '-suggestions'"
           role="listbox"
           [attr.aria-label]="'Vorschläge für ' + (label || 'Bahnhof')"
           class="absolute z-50 left-0 right-0 mt-1.5 bg-white border border-[#D7CCC8] rounded-2xl shadow-xl overflow-hidden max-h-80 overflow-y-auto divide-y divide-[#EFEBE9] animate-in fade-in zoom-in-95 duration-100"
         >
-          <!-- Option: Aktueller Standort (GPS) with street and number -->
-          @if (allowCurrentLocation && (!searchQuery().trim() || isLocationQuery(searchQuery()))) {
-            <div class="p-1.5 bg-[#EDF9F0] border-b border-[#B7E4C7]">
-              <button
-                type="button"
-                id="btn-select-gps-location"
-                (click)="selectCurrentLocation()"
-                role="option"
-                aria-selected="false"
-                class="w-full text-left px-3 py-2 rounded-xl bg-white hover:bg-[#E2F5E7] border border-[#B7E4C7] flex items-center justify-between text-xs text-[#1B4332] transition-colors cursor-pointer shadow-2xs group"
-                aria-label="Aktueller Standort über GPS auswählen"
-              >
-                <div class="flex items-center gap-2.5 min-w-0">
-                  <div class="w-7 h-7 rounded-lg bg-[#2D6A4F] text-white flex items-center justify-center shrink-0" aria-hidden="true">
-                    <span class="mat-icon text-sm">my_location</span>
-                  </div>
-                  <div class="truncate">
-                    <div class="font-black text-[#1B4332] text-xs flex items-center gap-1.5">
-                      <span>Aktueller Standort (GPS)</span>
-                      @if (transitService.userStreetNumber()) {
-                        <span class="px-1.5 py-0.2 bg-[#2D6A4F] text-white rounded text-[9px] font-bold">
-                          {{ transitService.userStreetNumber() }}
-                        </span>
-                      } @else {
-                        <span class="px-1.5 py-0.2 bg-[#2D6A4F] text-white rounded text-[9px] font-bold uppercase tracking-wider">
-                          Live-Fußweg
-                        </span>
-                      }
-                    </div>
-                    <div class="text-[10px] text-[#2D6A4F] font-medium truncate">
-                      @if (transitService.userAddress()) {
-                        📍 {{ transitService.userAddress() }} • Fußweg zur Haltestelle
-                      } @else if (transitService.userLocation()) {
-                        GPS aktiv • Automatische Berechnung ab Haltestelle in der Nähe
-                      } @else {
-                        GPS aktivieren & ab deiner aktuellen Straße starten
-                      }
-                    </div>
-                  </div>
-                </div>
-                <span class="mat-icon text-sm text-[#2D6A4F] group-hover:translate-x-0.5 transition-transform" aria-hidden="true">arrow_forward</span>
-              </button>
-            </div>
-          }
-
-          <!-- Location Proximity Bar & Quick Chips (Single Compact Swipeable Row) -->
-          <div class="px-2.5 py-1.5 bg-[#FAF7F2] border-b border-[#E6DED6] flex items-center justify-between gap-2 text-[10px] text-[#795548]" role="toolbar" aria-label="Schnellwahl-Bahnhöfe">
-            <div class="flex items-center gap-1.5 min-w-0 flex-1 overflow-hidden">
-              <span class="mat-icon text-xs text-[#2D6A4F] shrink-0" title="Schnellwahl & Favoriten" aria-hidden="true">bolt</span>
-              
-              <!-- Horizontal swipeable chips -->
-              <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar flex-nowrap py-0.5 touch-pan-x min-w-0 flex-1">
-                @for (chip of quickChips(); track chip.id) {
-                  <button
-                    type="button"
-                    (click)="selectStation(chip)"
-                    class="px-2.5 py-0.5 rounded text-[10px] font-bold bg-white hover:bg-[#EDF9F0] hover:text-[#1B4332] hover:border-[#2D6A4F] text-[#4E342E] border border-[#D7CCC8] whitespace-nowrap transition-all cursor-pointer shadow-2xs shrink-0"
-                    [class.border-[#2D6A4F]]="selectedStation()?.id === chip.id"
-                    [class.bg-[#EDF9F0]]="selectedStation()?.id === chip.id"
-                    [class.text-[#1B4332]]="selectedStation()?.id === chip.id"
-                    [title]="chip.name"
-                    [attr.aria-label]="'Station ' + chip.name + ' auswählen'"
-                  >
-                    {{ chip.name }}
-                  </button>
-                }
-              </div>
-            </div>
-
-            <div class="shrink-0 flex items-center pl-1 border-l border-[#E6DED6]">
-              @if (transitService.userLocation()) {
-                <span class="text-[9px] text-[#2D6A4F] font-bold flex items-center gap-0.5 bg-[#EDF9F0] px-1.5 py-0.5 rounded border border-[#B7E4C7]" aria-label="GPS-Standort aktiv">
-                  <span class="mat-icon text-[11px]" aria-hidden="true">my_location</span>
-                  <span class="hidden sm:inline">GPS</span>
-                </span>
-              } @else {
-                <button
-                  type="button"
-                  (click)="activateGeolocation($event)"
-                  class="text-[9px] text-[#2D6A4F] font-bold hover:underline flex items-center gap-0.5 cursor-pointer bg-white px-1.5 py-0.5 rounded border border-[#D7CCC8]"
-                  title="GPS aktivieren für Stationen in der Nähe"
-                  aria-label="GPS-Standortermittlung aktivieren"
-                >
-                  <span class="mat-icon text-[11px]" aria-hidden="true">near_me</span>
-                  <span>Standort</span>
-                </button>
-              }
-            </div>
-          </div>
-
-          <!-- Matching Suggestions List -->
+          <!-- Matching Suggestions List (No Aktueller Standort inside suggestions) -->
           @if (displayedSuggestions().length > 0) {
             <div class="py-1">
               <div class="px-3 py-1 text-[9px] font-bold text-[#8D6E63] uppercase tracking-wider flex items-center justify-between border-b border-[#F5EFE6]">
                 <span>
-                  {{ searchQuery().trim().length > 0 ? displayedSuggestions().length + ' Treffer' : (transitService.userLocation() ? '📍 Stationen in deiner Nähe' : 'Wichtige Bahnhöfe') }}
+                  {{ displayedSuggestions().length }} Treffer für „{{ searchQuery().trim() }}“
                 </span>
-                @if (searchQuery().trim().length > 0) {
-                  <span class="text-[9px] text-[#A1887F] font-normal lowercase">Nah- & Fernverkehr</span>
-                }
+                <span class="text-[9px] text-[#A1887F] font-normal lowercase">Nah- & Fernverkehr</span>
               </div>
               @for (station of displayedSuggestions(); track station.id + '-' + $index; let idx = $index) {
                 <button
@@ -278,7 +207,7 @@ export interface EnrichedStationItem extends Station {
             <div class="p-4 text-center text-xs text-[#8D6E63] space-y-1" role="status">
               <span class="mat-icon text-base text-[#BCAAA4]" aria-hidden="true">search_off</span>
               <div>Keine Haltestelle für „{{ searchQuery() }}“ gefunden.</div>
-              <div class="text-[11px] text-[#A1887F]">Du kannst nach jedem Bahnhof in ganz Deutschland suchen (z. B. Horst, Dauenhof, Konstanz, Westerland).</div>
+              <div class="text-[11px] text-[#A1887F]">Suche nach Bahnhöfen in ganz Deutschland (z. B. Horst, Elmshorn, Kiel, Westerland).</div>
             </div>
           }
         </div>
@@ -293,18 +222,23 @@ export class StationInput {
   @Input() iconName = 'place';
   @Input() inputId = 'station-input';
   @Input() allowCurrentLocation = true;
+  @Input() isCursorActive = false;
 
   @Input() set initialStation(station: Station | null) {
     if (station) {
       this.selectedStation.set(station);
       this.searchQuery.set(station.name);
+      this.queryChange.emit(station.name);
     } else {
       this.selectedStation.set(null);
       this.searchQuery.set('');
+      this.queryChange.emit('');
     }
   }
 
   @Output() stationChange = new EventEmitter<Station | null>();
+  @Output() inputFocus = new EventEmitter<void>();
+  @Output() queryChange = new EventEmitter<string>();
 
   readonly selectedStation = signal<Station | null>(null);
   readonly searchQuery = signal<string>('');
@@ -378,36 +312,38 @@ export class StationInput {
       };
     };
 
-    // If query is empty, show nearby stations + popular hubs
-    if (!q) {
-      const enrichedAll = ALL_GERMAN_STATIONS.map(s => enrichStation(s));
-      if (userLoc) {
-        // Sort by physical proximity when user GPS is active
-        return enrichedAll
-          .sort((a, b) => {
-            const distA = a.distanceKm ?? 9999;
-            const distB = b.distanceKm ?? 9999;
-            return distA - distB;
-          })
-          .slice(0, 14);
-      }
-      return enrichedAll.slice(0, 14);
+    // Do not show suggestions until at least 2 characters are entered (optimization & minimalism)
+    if (q.length < 2) {
+      return [];
     }
 
     // When searching: match against ALL_GERMAN_STATIONS + API suggestions
     const localFiltered = ALL_GERMAN_STATIONS.filter(s => {
+      if (s.isCurrentLocation || s.id === 'current-location' || s.name.toLowerCase().includes('standort') || s.name.toLowerCase().includes('location')) {
+        return false;
+      }
       const sName = s.name.toLowerCase();
       const sClean = sName.replace(/[()-]/g, ' ');
       return sName.includes(q) || sClean.includes(q) || (s.region && s.region.toLowerCase().includes(q));
     });
 
     const localEnriched = localFiltered.map(s => enrichStation(s));
-    const apiEnriched = this.apiSuggestions().map(s => enrichStation(s));
+    const apiEnriched = this.apiSuggestions()
+      .filter(s => !s.isCurrentLocation && s.id !== 'current-location' && !s.name.toLowerCase().includes('standort') && !s.name.toLowerCase().includes('location'))
+      .map(s => enrichStation(s));
 
     // Combine avoiding duplicates
     const mergedMap = new Map<string, EnrichedStationItem>();
 
     for (const item of [...localEnriched, ...apiEnriched]) {
+      if (
+        item.isCurrentLocation ||
+        item.id === 'current-location' ||
+        item.name.toLowerCase().includes('standort') ||
+        item.name.toLowerCase().includes('location')
+      ) {
+        continue;
+      }
       const normKey = item.name.toLowerCase().replace(/\s+/g, ' ').replace(/[()-]/g, '');
       if (!mergedMap.has(normKey)) {
         mergedMap.set(normKey, item);
@@ -474,9 +410,9 @@ export class StationInput {
   onInputChange(event: Event) {
     const val = (event.target as HTMLInputElement).value;
     this.searchQuery.set(val);
+    this.queryChange.emit(val);
     this.selectedStation.set(null);
     this.stationChange.emit(null);
-    this.isOpen.set(true);
     this.highlightedIndex.set(-1);
 
     if (this.debounceTimer) {
@@ -484,11 +420,16 @@ export class StationInput {
     }
 
     if (val.trim().length >= 2) {
+      this.isOpen.set(true);
       this.isSearching.set(true);
       this.debounceTimer = setTimeout(async () => {
         try {
           const results = await this.transitService.searchStations(val);
-          this.apiSuggestions.set(results);
+          // Never include current location or standort in station suggestions
+          const cleanResults = results.filter(
+            s => !s.isCurrentLocation && s.id !== 'current-location' && !s.name.toLowerCase().includes('standort') && !s.name.toLowerCase().includes('location')
+          );
+          this.apiSuggestions.set(cleanResults);
         } catch {
           this.apiSuggestions.set([]);
         } finally {
@@ -496,28 +437,26 @@ export class StationInput {
         }
       }, 120);
     } else {
+      this.isOpen.set(false);
       this.apiSuggestions.set([]);
       this.isSearching.set(false);
     }
   }
 
   onInputFocus() {
-    this.isOpen.set(true);
+    this.inputFocus.emit();
     this.highlightedIndex.set(-1);
-    
-    const val = this.searchQuery().trim();
-    if (val.length >= 2 && this.apiSuggestions().length === 0) {
-      this.isSearching.set(true);
-      this.transitService.searchStations(val).then(res => {
-        this.apiSuggestions.set(res);
-        this.isSearching.set(false);
-      }).catch(() => {
-        this.isSearching.set(false);
-      });
-    }
+    // User mandate: No suggestions appear upon simply placing the cursor into either field.
+    // Suggestions are only triggered when the user types the second character (length >= 2).
+    this.isOpen.set(false);
   }
 
   onKeyDown(event: KeyboardEvent) {
+    const q = this.searchQuery().trim();
+    if (q.length < 2) {
+      return;
+    }
+
     const list = this.displayedSuggestions();
     if (!this.isOpen() || list.length === 0) {
       if (event.key === 'ArrowDown' || event.key === 'Enter') {
@@ -561,46 +500,43 @@ export class StationInput {
     );
   }
 
-  selectCurrentLocation() {
+  selectCurrentLocation(event?: Event) {
+    if (event) {
+      event.stopPropagation();
+      event.preventDefault();
+    }
     this.isOpen.set(false);
     this.highlightedIndex.set(-1);
 
     // Start active tracking
     this.transitService.startActiveTracking();
 
-    // Get current address or fallback address immediately
-    const streetNumber = this.transitService.userStreetNumber();
-    const fullAddr = this.transitService.userAddress();
-    const addressToDisplay = fullAddr || streetNumber || 'Mönckebergstraße 7, 20095 Hamburg';
+    const displayLabel = 'Aktueller Standort';
+    this.searchQuery.set(displayLabel);
+    this.queryChange.emit(displayLabel);
 
-    // The user requested: ONLY show the address in the text box, do NOT write "Aktueller Standort"
-    this.searchQuery.set(addressToDisplay);
-
-    const initialLoc = this.transitService.userLocation() || { latitude: 53.551086, longitude: 9.993682 };
+    const initialLoc = this.transitService.userLocation();
     const currentLocStation: Station = {
       id: 'current-location',
-      name: addressToDisplay,
-      address: addressToDisplay,
-      streetNumber: streetNumber || addressToDisplay,
+      name: displayLabel,
+      address: this.transitService.userAddress() || undefined,
+      streetNumber: this.transitService.userStreetNumber() || undefined,
       isCurrentLocation: true,
-      location: initialLoc
+      location: initialLoc || undefined
     };
 
     this.selectedStation.set(currentLocStation);
     this.stationChange.emit(currentLocStation);
 
-    // Refine location and reverse geocoding in the background
+    // Actively query device GPS coordinates with force=true
     this.transitService.requestGeolocation(true).then(async (loc) => {
       if (loc) {
         const geo = await this.transitService.fetchReverseGeocode(loc.latitude, loc.longitude);
-        const resolvedAddress = geo.fullAddress || geo.streetNumber || addressToDisplay;
-        this.searchQuery.set(resolvedAddress);
-
         const updatedStation: Station = {
           id: 'current-location',
-          name: resolvedAddress,
-          address: resolvedAddress,
-          streetNumber: geo.streetNumber || resolvedAddress,
+          name: displayLabel,
+          address: geo.fullAddress || this.transitService.userAddress() || undefined,
+          streetNumber: geo.streetNumber || this.transitService.userStreetNumber() || undefined,
           isCurrentLocation: true,
           location: loc
         };
@@ -623,6 +559,7 @@ export class StationInput {
     }
     this.selectedStation.set(enriched);
     this.searchQuery.set(enriched.name);
+    this.queryChange.emit(enriched.name);
     this.isOpen.set(false);
     this.highlightedIndex.set(-1);
     if (!isCur) {
@@ -634,6 +571,7 @@ export class StationInput {
   clearStation() {
     this.selectedStation.set(null);
     this.searchQuery.set('');
+    this.queryChange.emit('');
     this.apiSuggestions.set([]);
     this.isOpen.set(false);
     this.highlightedIndex.set(-1);

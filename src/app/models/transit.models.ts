@@ -11,6 +11,7 @@ export interface Station {
   isCurrentLocation?: boolean;
   address?: string;
   streetNumber?: string;
+  distanceKm?: number;
   products?: {
     nationalExpress?: boolean;
     national?: boolean;
@@ -112,6 +113,50 @@ export interface ConnectionJourney {
   transferDetails: {
     stationName: string;
     bufferMinutes: number;
+  }[];
+  accessibility?: RouteAccessibilitySummary;
+}
+
+export type ElevatorOperationalState = 'in_service' | 'maintenance' | 'out_of_order' | 'unknown';
+
+export interface ElevatorFacility {
+  id: string;
+  stationId?: string;
+  stationName: string;
+  description: string;
+  platform?: string;
+  state: ElevatorOperationalState;
+  stateExplanation?: string;
+  lastUpdated?: string;
+}
+
+export interface StationAccessibility {
+  stationId: string;
+  stationName: string;
+  isStepFree: boolean;
+  overallScorePercent: number;
+  tactilePaving: boolean;
+  accessibleToilet: boolean;
+  stepFreeAccessNote?: string;
+  mobilityServiceAvailable: boolean;
+  elevators: ElevatorFacility[];
+  elevatorsTotal: number;
+  elevatorsInService: number;
+  elevatorsInMaintenance: number;
+  elevatorsOutOfOrder: number;
+  activeDisruptions: string[];
+}
+
+export interface RouteAccessibilitySummary {
+  isFullyStepFree: boolean;
+  scorePercent: number;
+  badgeLabel: string;
+  statusType: 'success' | 'warning' | 'neutral';
+  stationNotes: {
+    stationName: string;
+    isStepFree: boolean;
+    hasDisruption: boolean;
+    note: string;
   }[];
 }
 

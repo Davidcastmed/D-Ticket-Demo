@@ -199,7 +199,27 @@
                     }
                   </button>
 
-                  <!-- 4. Karte umschalten -->
+                  <!-- 4. Barrierefreiheit & Aufzugs-Monitor -->
+                  <button
+                    type="button"
+                    id="menu-item-accessibility"
+                    role="menuitem"
+                    aria-label="Barrierefreiheit und Aufzugs-Monitor Hamburg"
+                    (click)="setTab('accessibility'); showMoreMenu.set(false)"
+                    [class.bg-[#EDF9F0]]="currentTab() === 'accessibility'"
+                    [class.text-[#1B4332]]="currentTab() === 'accessibility'"
+                    class="w-full text-left px-3.5 py-2 text-xs font-bold text-[#3E2723] hover:bg-[#FAF7F2] flex items-center justify-between gap-2 cursor-pointer transition-colors"
+                  >
+                    <div class="flex items-center gap-2">
+                      <span class="mat-icon text-base text-[#2D6A4F]" aria-hidden="true">accessible</span>
+                      <span>Barrierefreiheit & Aufzüge</span>
+                    </div>
+                    @if (currentTab() === 'accessibility') {
+                      <span class="text-[10px] font-black text-[#2D6A4F] bg-[#D8F3DC] px-1.5 py-0.2 rounded" aria-label="Aktive Ansicht">Aktiv</span>
+                    }
+                  </button>
+
+                  <!-- 5. Karte umschalten -->
                   <button
                     type="button"
                     id="menu-item-toggle-map"
@@ -284,6 +304,12 @@
               (navigateToPlanner)="onNavigateToPlanner($event)"
               (navigateToLiveBoard)="onNavigateToLiveBoard($event)"
             ></app-favorites-view>
+          }
+          @case ('accessibility') {
+            <app-accessibility-view
+              (planJourney)="onNavigateToPlanner($event)"
+              (switchTab)="setTab($event)"
+            ></app-accessibility-view>
           }
         }
       </div>

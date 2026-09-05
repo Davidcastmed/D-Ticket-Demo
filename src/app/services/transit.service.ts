@@ -3,7 +3,8 @@ import {
   Station,
   ConnectionJourney,
   DepartureItem,
-  RegionalGetaway
+  RegionalGetaway,
+  StationAccessibility
 } from '../models/transit.models';
 import { ALL_GERMAN_STATIONS, calculateDistanceKm } from '../data/stations-data';
 import {
@@ -38,9 +39,9 @@ export interface WalkMetrics {
   providedIn: 'root'
 })
 export class TransitService {
-  // Navigation tabs in German:
-  // 'planner' ("Wohin möchtest du?"), 'live-board' ("Was fährt hier?"), 'hamburg-hub' ("Von Hamburg aus"), 'surprise' ("Überrasche mich"), 'favorites' ("Meine Favoriten")
-  readonly activeTab = signal<'planner' | 'live-board' | 'hamburg-hub' | 'surprise' | 'favorites'>('planner');
+  // Navigation tabs:
+  // 'planner' ("Wohin möchtest du?"), 'live-board' ("Was fährt hier?"), 'hamburg-hub' ("Von Hamburg aus"), 'surprise' ("Überrasche mich"), 'favorites' ("Meine Favoriten"), 'accessibility' ("Barrierefreiheit")
+  readonly activeTab = signal<'planner' | 'live-board' | 'hamburg-hub' | 'surprise' | 'favorites' | 'accessibility'>('planner');
 
   // Active journey for detailed timeline and map inspection
   readonly selectedJourney = signal<ConnectionJourney | null>(null);
@@ -59,6 +60,8 @@ export class TransitService {
   readonly userStreetNumber = signal<string | null>(null);
   readonly isLocating = signal<boolean>(false);
   readonly isTrackingActive = signal<boolean>(false);
+  readonly isRealGpsAcquired = signal<boolean>(false);
+  readonly locationStatus = signal<'initial' | 'locating' | 'granted' | 'denied' | 'fallback'>('initial');
 
   private watchId: number | null = null;
 
@@ -73,13 +76,20 @@ export class TransitService {
       this.addFavoriteRoute('Hamburg Hbf', 'Bremen Hbf');
     }
 
-    // Default fallback address initially so it's always ready immediately
-    this.userStreetNumber.set('Mönckebergstraße 7');
-    this.userAddress.set('Mönckebergstraße 7, 20095 Hamburg');
-    this.userLocation.set({ latitude: 53.551086, longitude: 9.993682 });
-
-    // Attempt geolocation non-intrusively
-    this.requestGeolocation(false);
+    // Attempt non-intrusive geolocation query only if permission was already granted previously
+    if (typeof window !== 'undefined' && typeof navigator !== 'undefined' && 'permissions' in navigator) {
+      try {
+        navigator.permissions.query({ name: 'geolocation' as PermissionName }).then((status) => {
+          if (status.state === 'granted') {
+            this.requestGeolocation(false);
+          }
+        }).catch(() => {
+          // Ignore
+        });
+      } catch {
+        // Ignore
+      }
+    }
   }
 
   async fetchReverseGeocode(lat: number, lon: number): Promise<{ streetNumber: string; fullAddress: string }> {
@@ -87,9 +97,9 @@ export class TransitService {
       const response = await fetch(`/api/reverse-geocode?lat=${lat}&lon=${lon}`);
       if (response.ok) {
         const data = await response.json();
-        if (data && (data.streetNumber || data.fullAddress)) {
-          const streetNum = data.streetNumber || 'Mönckebergstraße 7';
-          const fullAddr = data.fullAddress || `${streetNum}, Hamburg`;
+        if (data && (data.streetNumber || data.fullAddress || data.road || data.city)) {
+          const streetNum = data.streetNumber || data.road || data.city || 'Aktueller Standort';
+          const fullAddr = data.fullAddress || (data.city ? `${streetNum}, ${data.city}` : streetNum);
           this.userStreetNumber.set(streetNum);
           this.userAddress.set(fullAddr);
           return {
@@ -101,7 +111,11 @@ export class TransitService {
     } catch (err) {
       console.warn('Fehler beim Reverse-Geocoding:', err);
     }
-    const fallback = { streetNumber: 'Mönckebergstraße 7', fullAddress: 'Mönckebergstraße 7, 20095 Hamburg' };
+    const nearest = this.findNearestStationToCoordinates(lat, lon);
+    const fallback = {
+      streetNumber: 'Mönckebergstraße 7',
+      fullAddress: nearest ? `Mönckebergstraße 7 (Nähe ${nearest.name})` : 'Mönckebergstraße 7, Hamburg'
+    };
     this.userStreetNumber.set(fallback.streetNumber);
     this.userAddress.set(fallback.fullAddress);
     return fallback;
@@ -109,20 +123,28 @@ export class TransitService {
 
   requestGeolocation(force = false): Promise<{ latitude: number; longitude: number }> {
     return new Promise((resolve) => {
-      const fallbackLoc = { latitude: 53.551086, longitude: 9.993682 };
+      // Default fallback coordinates: Hamburg Hauptbahnhof (central hub)
+      const fallbackLoc = { latitude: 53.552736, longitude: 10.006909 };
 
       if (typeof window === 'undefined' || typeof navigator === 'undefined' || !navigator.geolocation) {
-        this.userLocation.set(fallbackLoc);
-        resolve(fallbackLoc);
+        this.locationStatus.set('fallback');
+        if (!this.userLocation()) {
+          this.userLocation.set(fallbackLoc);
+          this.userStreetNumber.set('Mönckebergstraße 7');
+          this.userAddress.set('Mönckebergstraße 7, Hamburg');
+        }
+        resolve(this.userLocation() || fallbackLoc);
         return;
       }
-      const existing = this.userLocation();
-      if (existing && !force) {
-        resolve(existing);
+
+      if (!force && this.isRealGpsAcquired() && this.userLocation()) {
+        resolve(this.userLocation()!);
         return;
       }
 
       this.isLocating.set(true);
+      this.locationStatus.set('locating');
+
       navigator.geolocation.getCurrentPosition(
         async (pos) => {
           const loc = {
@@ -130,21 +152,31 @@ export class TransitService {
             longitude: pos.coords.longitude
           };
           this.userLocation.set(loc);
+          this.isRealGpsAcquired.set(true);
+          this.locationStatus.set('granted');
           this.isLocating.set(false);
-          await this.fetchReverseGeocode(loc.latitude, loc.longitude);
+
+          try {
+            await this.fetchReverseGeocode(loc.latitude, loc.longitude);
+          } catch {
+            // Geocode failed silently
+          }
           resolve(loc);
         },
         async (err) => {
-          console.warn('Geolocation denied/timeout, using fallback:', err);
+          console.warn('Geolocation denied or timed out:', err);
           this.isLocating.set(false);
-          this.userLocation.set(fallbackLoc);
-          if (!this.userAddress()) {
+          this.locationStatus.set(err.code === 1 ? 'denied' : 'fallback');
+          this.isRealGpsAcquired.set(false);
+
+          if (!this.userLocation()) {
+            this.userLocation.set(fallbackLoc);
             this.userStreetNumber.set('Mönckebergstraße 7');
-            this.userAddress.set('Mönckebergstraße 7, 20095 Hamburg');
+            this.userAddress.set('Mönckebergstraße 7, Hamburg');
           }
-          resolve(fallbackLoc);
+          resolve(this.userLocation() || fallbackLoc);
         },
-        { enableHighAccuracy: true, timeout: 5000, maximumAge: 10000 }
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
       );
     });
   }
@@ -570,7 +602,16 @@ export class TransitService {
   }
 
   recordRecentStation(station: Station): void {
-    if (!station || !station.name) return;
+    if (
+      !station ||
+      !station.name ||
+      station.isCurrentLocation ||
+      station.id === 'current-location' ||
+      station.name.toLowerCase().includes('standort') ||
+      station.name.toLowerCase().includes('location')
+    ) {
+      return;
+    }
     const current = this.recentStations().filter(s => s.name.toLowerCase() !== station.name.toLowerCase());
     // Prepend to front and keep top 10
     const updated = [
@@ -578,5 +619,51 @@ export class TransitService {
       ...current
     ].slice(0, 10);
     this.saveRecentStations(updated);
+  }
+
+  /**
+   * Fetches real-time elevator & accessibility details for a specific station
+   */
+  async getStationAccessibility(stationName: string): Promise<StationAccessibility | null> {
+    const s = stationName.trim();
+    if (!s) return null;
+    try {
+      const res = await fetch(`/api/accessibility/station?station=${encodeURIComponent(s)}`, {
+        signal: AbortSignal.timeout(3000)
+      });
+      if (res.ok) {
+        return (await res.json()) as StationAccessibility;
+      }
+    } catch {
+      // Offline / fallback
+    }
+    return null;
+  }
+
+  /**
+   * Fetches live Hamburg-wide elevator status overview (Hochbahn / Urban Data Hub)
+   */
+  async getHamburgAccessibilityOverview(): Promise<{
+    summary: {
+      totalStationsMonitored: number;
+      totalElevators: number;
+      elevatorsInService: number;
+      elevatorsInMaintenance: number;
+      elevatorsOutOfOrder: number;
+      operationalRatePercent: number;
+      networkStatus: string;
+      dataSource: string;
+    };
+    stations: StationAccessibility[];
+  } | null> {
+    try {
+      const res = await fetch('/api/accessibility/hamburg', { signal: AbortSignal.timeout(3500) });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch {
+      // Offline / fallback
+    }
+    return null;
   }
 }
