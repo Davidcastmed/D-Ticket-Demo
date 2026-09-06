@@ -46,6 +46,9 @@ export class TransitService {
   // Active journey for detailed timeline and map inspection
   readonly selectedJourney = signal<ConnectionJourney | null>(null);
 
+  // Tracks whether connection search results are currently active in the planner view
+  readonly hasPlannerResults = signal<boolean>(false);
+
   // Active line for route exploration
   readonly selectedDeparture = signal<DepartureItem | null>(null);
 

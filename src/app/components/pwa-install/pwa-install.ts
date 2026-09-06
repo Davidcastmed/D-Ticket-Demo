@@ -1,6 +1,7 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { PwaService } from '../../services/pwa.service';
+import { TransitService } from '../../services/transit.service';
 
 @Component({
   selector: 'app-pwa-install',
@@ -12,7 +13,11 @@ import { PwaService } from '../../services/pwa.service';
       <aside
         id="floating-pwa-install-motivator"
         aria-label="App auf dem Gerät installieren"
-        class="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-40 flex items-center shadow-xl rounded-2xl overflow-hidden animate-in fade-in slide-in-from-bottom-3 duration-300 pointer-events-auto"
+        [class.bottom-[78px]]="isFooterVisible()"
+        [class.sm:bottom-[84px]]="isFooterVisible()"
+        [class.bottom-[28px]]="!isFooterVisible()"
+        [class.sm:bottom-[36px]]="!isFooterVisible()"
+        class="fixed right-4 sm:right-6 z-40 flex items-center shadow-xl rounded-2xl overflow-hidden animate-in fade-in transition-all duration-300 pointer-events-auto"
       >
         <button
           type="button"
@@ -165,6 +170,11 @@ import { PwaService } from '../../services/pwa.service';
 })
 export class PwaInstallModal {
   readonly pwaService = inject(PwaService);
+  readonly transitService = inject(TransitService);
+
+  readonly isFooterVisible = computed(() => {
+    return !(this.transitService.activeTab() === 'planner' && this.transitService.hasPlannerResults());
+  });
 
   onFloatingInstallClick(): void {
     this.pwaService.promptInstall();

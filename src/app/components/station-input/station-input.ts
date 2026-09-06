@@ -98,10 +98,10 @@ export interface EnrichedStationItem extends Station {
           [class.ring-2]="isCursorActive"
           [class.ring-[#2D6A4F]/25]="isCursorActive"
           [class.bg-white]="isCursorActive"
-          class="w-full pr-20 py-3 bg-[#FAF7F2] border border-[#D7CCC8] rounded-xl text-[#2E1F18] placeholder-[#8D6E63] text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]/30 focus:border-[#2D6A4F] focus:bg-white transition-all shadow-xs"
+          class="w-full pr-11 py-3 bg-[#FAF7F2] border border-[#D7CCC8] rounded-xl text-[#2E1F18] placeholder-[#8D6E63] text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]/30 focus:border-[#2D6A4F] focus:bg-white transition-all shadow-xs"
         />
 
-        <div class="absolute right-2 flex items-center gap-1 z-10">
+        <div class="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1 z-10">
           @if (isSearching()) {
             <span class="mat-icon animate-spin text-sm text-[#2D6A4F] mr-0.5" title="Stationen werden gesucht..." aria-hidden="true">sync</span>
           }
@@ -109,28 +109,16 @@ export interface EnrichedStationItem extends Station {
           @if (searchQuery()) {
             <button
               type="button"
-              (click)="clearStation()"
-              class="text-[#8D6E63] hover:text-[#3E2723] p-1 rounded-full cursor-pointer hover:bg-[#EFEBE9] transition-colors"
+              (click)="clearStation($event)"
+              class="w-6 h-6 rounded-full flex items-center justify-center text-[#8D6E63] hover:text-[#2E1F18] hover:bg-[#E6DED6] active:bg-[#D7CCC8] transition-colors cursor-pointer"
               title="Eingabe löschen"
               [attr.aria-label]="'Eingabe für ' + (label || 'Bahnhof') + ' löschen'"
             >
-              <span class="mat-icon text-sm" aria-hidden="true">close</span>
+              <span class="mat-icon text-sm leading-none" aria-hidden="true">close</span>
             </button>
           }
         </div>
       </div>
-
-      @if (selectedStation()?.isCurrentLocation) {
-        <div class="mt-1 flex items-center justify-between text-[11px] px-1 text-[#2D6A4F]">
-          <span class="flex items-center gap-1 truncate font-medium">
-            <span class="mat-icon text-xs">navigation</span>
-            <span class="truncate">{{ transitService.userAddress() || 'GPS aktiv • Fußweg zum nächsten Bahnhof' }}</span>
-          </span>
-          @if (transitService.isLocating()) {
-            <span class="shrink-0 text-[10px] text-[#2D6A4F] animate-pulse">GPS ermittelt...</span>
-          }
-        </div>
-      }
 
       <!-- Autocomplete Suggestions Dropdown: Only shown when at least 2 characters are typed -->
       @if (isOpen() && searchQuery().trim().length >= 2) {
@@ -568,7 +556,11 @@ export class StationInput {
     this.stationChange.emit(enriched);
   }
 
-  clearStation() {
+  clearStation(event?: Event) {
+    if (event) {
+      event.stopPropagation();
+      event.preventDefault();
+    }
     this.selectedStation.set(null);
     this.searchQuery.set('');
     this.queryChange.emit('');

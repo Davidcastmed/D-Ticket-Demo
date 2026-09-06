@@ -80,8 +80,7 @@ interface CuratedDestination {
             
             <!-- DB-style Clean Station Inputs with vertical swap connector -->
             <div class="relative bg-[#FAF7F2] p-2.5 sm:p-3 rounded-xl border border-[#E6DED6]">
-              <div class="grid grid-cols-1 gap-2.5 relative">
-                
+              <div class="relative space-y-2.5">
                 <!-- Start Station (Clean with placeholder, no redundant 'Von' label) -->
                 <div>
                   <app-station-input
@@ -119,8 +118,21 @@ interface CuratedDestination {
                   ></app-station-input>
                 </div>
 
-                <!-- 1rem Contenedor: Dein Standort (Aktueller Standort mit Straße & Hausnummer) + Karten-Icon mit Rückkehroption -->
-                <div class="mt-4 p-3 bg-white rounded-xl border border-[#E6DED6] hover:border-[#2D6A4F] flex items-center justify-between gap-3 transition-all shadow-2xs">
+                <!-- DB-Style Floating Swap Button: montado armónicamente sobre las dos cajas de texto a la derecha -->
+                <button
+                  type="button"
+                  id="btn-swap-stations"
+                  (click)="swapStations()"
+                  class="group absolute right-3.5 sm:right-4 top-1/2 -translate-y-1/2 w-[38px] h-[38px] rounded-full bg-white hover:bg-[#EDF9F0] text-[#2D6A4F] hover:text-[#1B4332] flex items-center justify-center cursor-pointer transition-all duration-200 shadow-xs hover:shadow-md border border-[#E0D7D0] hover:border-[#2D6A4F] ring-[3.5px] ring-[#FAF7F2] active:scale-95 focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]/40 z-20"
+                  title="Start und Ziel tauschen"
+                  aria-label="Start- und Zielbahnhof tauschen"
+                >
+                  <span class="mat-icon text-lg text-[#2D6A4F] group-hover:text-[#1B4332] transition-transform duration-300 group-hover:rotate-180 group-active:rotate-180 select-none" aria-hidden="true">swap_vert</span>
+                </button>
+              </div>
+
+              <!-- 1rem Contenedor: Dein Standort (Aktueller Standort mit vollständiger Adresse) + Karten-Icon mit Rückkehroption -->
+              <div class="mt-3.5 p-3 bg-white rounded-xl border border-[#E6DED6] hover:border-[#2D6A4F] flex items-center justify-between gap-3 transition-all shadow-2xs">
                   
                   <!-- Klickbereich: Überträgt den aktuellen Standort in 'Von' (Startbahnhof) -->
                   <button
@@ -140,16 +152,16 @@ interface CuratedDestination {
                       }
                     </div>
 
-                    <!-- Dos filas: 1. Fija 'Dein Standort', 2. Letra 15% más pequeña y fino la calle y número -->
+                    <!-- Dos filas: 1. Fija 'Dein Standort', 2. Dirección completa -->
                     <div class="min-w-0 truncate">
                       <div class="text-[13px] font-bold text-[#1F1612] group-hover:text-[#1B4332] transition-colors">
                         <span>Dein Standort</span>
                       </div>
-                      <div class="text-[11px] font-light text-[#795548] truncate mt-0.5">
+                      <div class="text-[11px] font-light text-[#795548] truncate mt-0.5" [title]="currentFullAddress()">
                         @if (transitService.isLocating()) {
                           <span class="text-[#2D6A4F] animate-pulse">Standort wird ermittelt...</span>
                         } @else {
-                          <span>{{ currentStreetAndNumber() }}</span>
+                          <span>{{ currentFullAddress() }}</span>
                         }
                       </div>
                     </div>
@@ -167,19 +179,6 @@ interface CuratedDestination {
                     <span class="mat-icon text-lg" aria-hidden="true">map</span>
                   </button>
                 </div>
-
-                <!-- DB-Style Floating Swap Button on the right side centered between from & to -->
-                <button
-                  type="button"
-                  id="btn-swap-stations"
-                  (click)="swapStations()"
-                  class="absolute right-2.5 top-[34px] -translate-y-1/2 w-8 h-8 rounded-full bg-white hover:bg-[#EFEBE6] text-[#4E342E] flex items-center justify-center cursor-pointer transition-all shadow-xs border border-[#D7CCC8] hover:border-[#1B4332] z-10"
-                  title="Start und Ziel tauschen"
-                  aria-label="Start- und Zielbahnhof tauschen"
-                >
-                  <span class="mat-icon text-base text-[#2D6A4F]" aria-hidden="true">swap_vert</span>
-                </button>
-              </div>
             </div>
 
             <!-- Compact Filter Bar: Optionen & Direkt-Ziele Toggle + D-Ticket Status Badge fitting the full width without horizontal scroll -->
@@ -222,14 +221,14 @@ interface CuratedDestination {
                   id="btn-search-compact"
                   [disabled]="isLoading() || !toStation()"
                   class="w-full py-2.5 sm:py-3 bg-[#1B4332] hover:bg-[#132A1E] disabled:bg-[#EFEBE6] disabled:text-[#A1887F] disabled:cursor-not-allowed text-white font-black text-xs tracking-wider rounded-lg shadow-xs hover:shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer"
-                  aria-label="Verbindung suchen"
+                  aria-label="Verbindungen suchen"
                 >
                   @if (isLoading()) {
                     <span class="mat-icon animate-spin text-sm" aria-hidden="true">sync</span>
                     <span>LADEN...</span>
                   } @else {
                     <span class="mat-icon text-sm" aria-hidden="true">search</span>
-                    <span>VERBINDUNG SUCHEN</span>
+                    <span>VERBINDUNGEN SUCHEN</span>
                   }
                 </button>
               </div>
@@ -773,9 +772,9 @@ interface CuratedDestination {
           </div>
         }
 
-            <!-- Pre-Search Information: In der Nähe: (4 Stationen) & Vorschläge: (Zuletzt gesuchte & beliebte Stationen) -->
-            <!-- Placed JUSTO ABAJO DE Verbindungen suchen, visible ONLY when both origin and destination inputs are empty -->
-            @if (areInputsEmpty()) {
+            <!-- Pre-Search Information: In der Nähe: (4 Stationen in 4 Zeilen) & Vorschläge: (4 Stationen in 4 Zeilen) -->
+            <!-- Visible directly below Verbindungen suchen until the user clicks search -->
+            @if (!hasSearched() && !isLoading()) {
               <div id="container-presearch-suggestions" class="space-y-3.5 pt-3.5 mt-2 border-t border-[#EDE5DC] animate-in fade-in duration-150">
                 
                 <!-- Target indicator: Shows where clicked station will be inserted (cursor position) -->
@@ -818,7 +817,7 @@ interface CuratedDestination {
                   </div>
                 </div>
 
-                <!-- 1. In der Nähe: (4 sugestiones esperando por si el usuario quiere ir a una de estas direcciones) -->
+                <!-- 1. In der Nähe: 4 Stationen in 4 Reihen -->
                 <div id="section-in-der-naehe" class="space-y-1.5">
                   <div class="flex items-center justify-between">
                     <h3 class="text-xs font-bold text-[#1F1612] flex items-center gap-1.5">
@@ -828,35 +827,38 @@ interface CuratedDestination {
                     <span class="text-[10px] text-[#8D6E63] font-medium">4 nahe Stationen</span>
                   </div>
 
-                  <!-- Contenedor con cuatro sugerencias -->
-                  <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                  <!-- 4 Stationen in 4 Reihen -->
+                  <div class="space-y-1.5">
                     @for (st of nearbyStations(); track st.id || st.name; let idx = $index) {
                       <button
                         type="button"
                         [id]="'btn-nearby-station-' + idx"
                         (click)="applySuggestionToActiveInput(st)"
-                        class="p-2.5 rounded-xl bg-white hover:bg-[#EDF9F0] border border-[#E6DED6] hover:border-[#2D6A4F] text-left transition-all group cursor-pointer shadow-2xs flex flex-col justify-between"
+                        class="w-full p-2 sm:p-2.5 rounded-xl bg-white hover:bg-[#EDF9F0] border border-[#E6DED6] hover:border-[#2D6A4F] text-left transition-all group cursor-pointer shadow-2xs flex items-center justify-between gap-2.5"
                         [title]="st.name + ' in ' + (activeInput() === 'from' ? 'Von' : 'Nach') + ' übernehmen'"
                         [attr.aria-label]="'Station In der Nähe: ' + st.name + ', Entfernung ' + st.distanceText"
                       >
-                        <div class="flex items-start gap-1 min-w-0">
-                          <span class="mat-icon text-xs text-[#2D6A4F] shrink-0 mt-0.5" aria-hidden="true">place</span>
-                          <span class="text-xs font-bold text-[#1F1612] group-hover:text-[#1B4332] line-clamp-2 leading-tight">
+                        <div class="flex items-center gap-2 min-w-0">
+                          <span class="w-6 h-6 rounded-md bg-[#EDF9F0] text-[#2D6A4F] group-hover:bg-[#2D6A4F] group-hover:text-white flex items-center justify-center shrink-0 transition-colors">
+                            <span class="mat-icon text-sm" aria-hidden="true">place</span>
+                          </span>
+                          <span class="text-xs font-bold text-[#1F1612] group-hover:text-[#1B4332] truncate">
                             {{ st.name }}
                           </span>
                         </div>
-                        <div class="flex items-center justify-between gap-1 text-[10px] font-medium text-[#795548] mt-2 pt-1 border-t border-[#F0EAE1]">
-                          <span class="font-semibold text-[#2D6A4F] truncate">{{ st.distanceText }}</span>
+                        <div class="flex items-center gap-2 text-[10px] sm:text-[11px] font-medium text-[#795548] shrink-0">
+                          <span class="font-bold text-[#2D6A4F]">{{ st.distanceText }}</span>
                           @if (st.walkMinutes) {
-                            <span class="text-[#8D6E63] shrink-0">~{{ st.walkMinutes }}m</span>
+                            <span class="text-[#8D6E63] text-[9.5px] sm:text-[10px] bg-[#FAF7F2] px-1.5 py-0.5 rounded border border-[#E6DED6]">~{{ st.walkMinutes }}m zu Fuß</span>
                           }
+                          <span class="mat-icon text-xs text-[#8D6E63] group-hover:text-[#2D6A4F] transition-transform group-hover:translate-x-0.5" aria-hidden="true">chevron_right</span>
                         </div>
                       </button>
                     }
                   </div>
                 </div>
 
-                <!-- 2. Vorschläge: (inteligentes seleccionadas de las últimas que ha buscado el usuario) -->
+                <!-- 2. Vorschläge: 4 Stationen in 4 Reihen -->
                 <div id="section-vorschlaege" class="space-y-1.5 pt-1">
                   <div class="flex items-center justify-between">
                     <h3 class="text-xs font-bold text-[#1F1612] flex items-center gap-1.5">
@@ -866,26 +868,28 @@ interface CuratedDestination {
                     <span class="text-[10px] text-[#8D6E63] font-medium">Letzte Suchen & Favoriten</span>
                   </div>
 
-                  <!-- Contenedor con cuatro sugerencias -->
-                  <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                  <!-- 4 Stationen in 4 Reihen -->
+                  <div class="space-y-1.5">
                     @for (st of smartVorschlaege(); track st.id || st.name; let idx = $index) {
                       <button
                         type="button"
                         [id]="'btn-vorschlag-station-' + idx"
                         (click)="applySuggestionToActiveInput(st)"
-                        class="p-2.5 rounded-xl bg-[#FAF7F2] hover:bg-[#EDF9F0] border border-[#E6DED6] hover:border-[#2D6A4F] text-left transition-all group cursor-pointer shadow-2xs flex flex-col justify-between"
+                        class="w-full p-2 sm:p-2.5 rounded-xl bg-[#FAF7F2] hover:bg-[#EDF9F0] border border-[#E6DED6] hover:border-[#2D6A4F] text-left transition-all group cursor-pointer shadow-2xs flex items-center justify-between gap-2.5"
                         [title]="st.name + ' in ' + (activeInput() === 'from' ? 'Von' : 'Nach') + ' übernehmen'"
                         [attr.aria-label]="'Vorschlag: ' + st.name"
                       >
-                        <div class="flex items-start gap-1 min-w-0">
-                          <span class="mat-icon text-xs text-[#795548] group-hover:text-[#2D6A4F] shrink-0 mt-0.5" aria-hidden="true">train</span>
-                          <span class="text-xs font-bold text-[#1F1612] group-hover:text-[#1B4332] line-clamp-2 leading-tight">
+                        <div class="flex items-center gap-2 min-w-0">
+                          <span class="w-6 h-6 rounded-md bg-white text-[#795548] group-hover:bg-[#2D6A4F] group-hover:text-white border border-[#E6DED6] group-hover:border-[#2D6A4F] flex items-center justify-center shrink-0 transition-colors">
+                            <span class="mat-icon text-sm" aria-hidden="true">train</span>
+                          </span>
+                          <span class="text-xs font-bold text-[#1F1612] group-hover:text-[#1B4332] truncate">
                             {{ st.name }}
                           </span>
                         </div>
-                        <div class="flex items-center justify-between text-[10px] font-medium text-[#8D6E63] mt-2 pt-1 border-t border-[#F0EAE1]">
-                          <span class="truncate">Schnellauswahl</span>
-                          <span class="mat-icon text-xs text-[#8D6E63] group-hover:text-[#2D6A4F] shrink-0" aria-hidden="true">arrow_forward</span>
+                        <div class="flex items-center gap-2 text-[10px] sm:text-[11px] font-medium text-[#8D6E63] shrink-0">
+                          <span class="text-[9.5px] sm:text-[10px] bg-white px-2 py-0.5 rounded-md border border-[#E6DED6] text-[#795548] font-semibold">Schnellauswahl</span>
+                          <span class="mat-icon text-xs text-[#8D6E63] group-hover:text-[#2D6A4F] transition-transform group-hover:translate-x-0.5" aria-hidden="true">arrow_forward</span>
                         </div>
                       </button>
                     }
@@ -900,7 +904,7 @@ interface CuratedDestination {
         </div>
 
         <!-- SEARCH RESULTS SECTION: Placed directly below the search parameters in the main column, aligned so top badge touches the bottom edge of the top search card -->
-        @if (!areInputsEmpty() && (hasSearched() || isLoading())) {
+        @if (hasSearched() || isLoading()) {
           <div id="search-results-section" class="space-y-4 scroll-mt-6 animate-in fade-in duration-200 -mt-1.5">
             
             <!-- Loading Skeleton / Status -->
@@ -939,22 +943,37 @@ interface CuratedDestination {
                   </span>
                 </div>
 
-                <!-- Compact Sort Toggle Button (Expandable) -->
-                <button
-                  type="button"
-                  id="btn-sort-toggle"
-                  (click)="toggleSortOptions()"
-                  class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#FAF7F2] hover:bg-[#EDF9F0] text-[#4E342E] hover:text-[#1B4332] border border-[#E6DED6] hover:border-[#B7E4C7] transition-all cursor-pointer shadow-2xs shrink-0"
-                  [class.bg-[#EDF9F0]]="showSortOptions()"
-                  [class.border-[#B7E4C7]]="showSortOptions()"
-                  [class.text-[#1B4332]]="showSortOptions()"
-                  title="Sortieroptionen anzeigen oder verbergen"
-                  [attr.aria-expanded]="showSortOptions()"
-                  aria-label="Sortieroptionen umschalten"
-                >
-                  <span class="text-[11px]">{{ getSortLabel() }}</span>
-                  <span class="mat-icon text-xs text-[#795548] transition-transform duration-200" [class.rotate-180]="showSortOptions()" aria-hidden="true">expand_more</span>
-                </button>
+                <div class="flex items-center gap-2 shrink-0">
+                  <!-- Neue Suche Button -->
+                  <button
+                    type="button"
+                    id="btn-new-search-header"
+                    (click)="resetSearch()"
+                    class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-[#FAF7F2] hover:bg-[#EDF9F0] text-[#795548] hover:text-[#1B4332] border border-[#E6DED6] hover:border-[#B7E4C7] transition-all cursor-pointer shadow-2xs"
+                    title="Neue Suche starten und zurück zur Eingabe"
+                    aria-label="Neue Suche starten"
+                  >
+                    <span class="mat-icon text-xs text-[#2D6A4F]" aria-hidden="true">arrow_back</span>
+                    <span class="text-[11px]">Neue Suche</span>
+                  </button>
+
+                  <!-- Compact Sort Toggle Button (Expandable) -->
+                  <button
+                    type="button"
+                    id="btn-sort-toggle"
+                    (click)="toggleSortOptions()"
+                    class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#FAF7F2] hover:bg-[#EDF9F0] text-[#4E342E] hover:text-[#1B4332] border border-[#E6DED6] hover:border-[#B7E4C7] transition-all cursor-pointer shadow-2xs shrink-0"
+                    [class.bg-[#EDF9F0]]="showSortOptions()"
+                    [class.border-[#B7E4C7]]="showSortOptions()"
+                    [class.text-[#1B4332]]="showSortOptions()"
+                    title="Sortieroptionen anzeigen oder verbergen"
+                    [attr.aria-expanded]="showSortOptions()"
+                    aria-label="Sortieroptionen umschalten"
+                  >
+                    <span class="text-[11px]">{{ getSortLabel() }}</span>
+                    <span class="mat-icon text-xs text-[#795548] transition-transform duration-200" [class.rotate-180]="showSortOptions()" aria-hidden="true">expand_more</span>
+                  </button>
+                </div>
               </div>
 
               <!-- Collapsible Compact Sort Options -->
@@ -1307,6 +1326,15 @@ interface CuratedDestination {
                     aria-label="Fernverkehr ICE und IC einbeziehen und suchen"
                   >
                     ICE/IC anzeigen
+                  </button>
+                  <button
+                    type="button"
+                    (click)="resetSearch()"
+                    class="px-3 py-1.5 bg-[#FAF7F2] hover:bg-[#EFEBE6] text-[#4E342E] border border-[#D7CCC8] rounded-lg text-xs font-bold shadow-xs cursor-pointer flex items-center gap-1"
+                    aria-label="Suche zurücksetzen"
+                  >
+                    <span class="mat-icon text-xs text-[#2D6A4F]" aria-hidden="true">arrow_back</span>
+                    <span>Zurück zur Suche</span>
                   </button>
                 </div>
               </div>
@@ -1715,14 +1743,19 @@ export class PlannerView implements OnInit {
   private fb = inject(FormBuilder);
   readonly transitService = inject(TransitService);
 
-  readonly activeInput = signal<'from' | 'to'>('from');
+  readonly activeInput = signal<'from' | 'to'>('to');
   readonly showStandortMap = signal<boolean>(false);
 
   readonly expandedAccessibilityJourneyId = signal<string | null>(null);
 
-  readonly fromStation = signal<Station | null>(null);
+  // Origin always defaults to 'Mein Standort'
+  readonly fromStation = signal<Station | null>({
+    id: 'current-location',
+    name: 'Mein Standort',
+    isCurrentLocation: true
+  });
   readonly toStation = signal<Station | null>(null);
-  readonly fromStationQuery = signal<string>('');
+  readonly fromStationQuery = signal<string>('Mein Standort');
   readonly toStationQuery = signal<string>('');
 
   readonly areInputsEmpty = computed(() => {
@@ -2152,6 +2185,18 @@ export class PlannerView implements OnInit {
       }
     }
     return 'Mönckebergstraße 7';
+  });
+
+  readonly currentFullAddress = computed<string>(() => {
+    const addr = this.transitService.userAddress();
+    if (addr && addr !== 'Aktueller Standort' && addr !== 'Hamburg Hbf') {
+      return addr;
+    }
+    const streetNum = this.transitService.userStreetNumber();
+    if (streetNum && streetNum !== 'Aktueller Standort' && streetNum !== 'Hamburg Hbf') {
+      return streetNum.includes('Hamburg') ? streetNum : `${streetNum}, 20095 Hamburg`;
+    }
+    return 'Mönckebergstraße 7, 20095 Hamburg';
   });
 
   readonly standortMapStation = computed<Station>(() => {
@@ -2627,6 +2672,7 @@ export class PlannerView implements OnInit {
 
     this.isLoading.set(true);
     this.errorMessage.set('');
+    this.transitService.hasPlannerResults.set(true);
 
     const formVal = this.searchForm.value;
     const depDateTime = `${formVal.date}T${formVal.time}:00`;
@@ -2682,6 +2728,14 @@ export class PlannerView implements OnInit {
         }
       }, 50);
     }
+  }
+
+  resetSearch() {
+    this.hasSearched.set(false);
+    this.isLoading.set(false);
+    this.journeys.set([]);
+    this.errorMessage.set('');
+    this.transitService.hasPlannerResults.set(false);
   }
 
   setSortCriteria(criteria: 'fastest' | 'fewest-transfers' | 'departure') {

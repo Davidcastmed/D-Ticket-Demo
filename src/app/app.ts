@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   ViewChild,
+  computed,
   signal,
   inject
 } from '@angular/core';
@@ -81,8 +82,25 @@ export class App {
   readonly mapActiveJourney = signal<ConnectionJourney | null>(null);
   readonly mapSelectedStation = signal<Station | null>(null);
 
+  // Whether connection search results are currently visible in the planner
+  readonly hasSearchResults = computed(() => {
+    return this.currentTab() === 'planner' && this.transitService.hasPlannerResults();
+  });
+
+  navigateToHome(): void {
+    this.transitService.activeTab.set('planner');
+    this.transitService.hasPlannerResults.set(false);
+    if (this.plannerViewComponent) {
+      this.plannerViewComponent.resetSearch();
+    }
+  }
+
   setTab(tab: 'planner' | 'live-board' | 'hamburg-hub' | 'surprise' | 'favorites' | 'accessibility') {
-    this.transitService.activeTab.set(tab);
+    if (tab === 'planner' && this.currentTab() === 'planner' && this.transitService.hasPlannerResults()) {
+      this.navigateToHome();
+    } else {
+      this.transitService.activeTab.set(tab);
+    }
   }
 
   onShowJourneyOnMap(journey: ConnectionJourney) {
