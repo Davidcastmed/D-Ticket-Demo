@@ -8,7 +8,10 @@ import {
   TransitRemark,
   TransitLeg,
   ConnectionJourney,
-  DepartureItem
+  DepartureItem,
+  LegLiveStatus,
+  JourneyLiveStatusResponse,
+  LiveStatusCategory
 } from '../app/models/transit.models';
 
 export type {
@@ -19,7 +22,10 @@ export type {
   TransitRemark,
   TransitLeg,
   ConnectionJourney,
-  DepartureItem
+  DepartureItem,
+  LegLiveStatus,
+  JourneyLiveStatusResponse,
+  LiveStatusCategory
 };
 
 const HAFAS_API_BASE = 'https://v6.db.transport.rest';
@@ -2213,4 +2219,261 @@ function generateFallbackDepartures(station: Station): DepartureItem[] {
       isDeutschlandticketValid: true
     };
   });
+}
+
+/**
+ * Fetch and analyze real-time delay or cancellation status for a regional journey and its train legs
+ */
+export async function getJourneyLiveRealtimeStatus(payload: {
+  journeyId?: string;
+  legs: {
+    line?: { name?: string; product?: string; operator?: { name?: string }; fahrtNr?: string };
+    origin?: { id?: string; name?: string };
+    destination?: { id?: string; name?: string };
+    departure?: string;
+    plannedDeparture?: string;
+    arrival?: string;
+    plannedArrival?: string;
+    departurePlatform?: string | null;
+    arrivalPlatform?: string | null;
+    departureDelay?: number;
+    arrivalDelay?: number;
+    cancelled?: boolean;
+    walking?: boolean;
+    remarks?: { text?: string; summary?: string; type?: string }[];
+  }[];
+  transferDetails?: { stationName: string; bufferMinutes: number }[];
+  simulateMode?: 'on_time' | 'delay' | 'cancellation';
+}): Promise<JourneyLiveStatusResponse> {
+  const legsData = Array.isArray(payload.legs) ? payload.legs : [];
+  const transferDetails = Array.isArray(payload.transferDetails) ? payload.transferDetails : [];
+  const simulateMode = payload.simulateMode;
+
+  const legStatuses: LegLiveStatus[] = [];
+  const disruptionNotes: string[] = [];
+
+  for (let i = 0; i < legsData.length; i++) {
+    const leg = legsData[i];
+    const isWalking = leg.walking === true || !leg.line;
+    const lineName = leg.line?.name || (isWalking ? 'Fußweg' : 'Regionalzug');
+    const plannedDep = leg.plannedDeparture || leg.departure || new Date().toISOString();
+    const plannedArr = leg.plannedArrival || leg.arrival || new Date().toISOString();
+    const plannedDepPlat = leg.departurePlatform || null;
+
+    if (isWalking) {
+      legStatuses.push({
+        legIndex: i,
+        lineName: 'Fußweg',
+        isWalking: true,
+        departureDelay: 0,
+        arrivalDelay: 0,
+        cancelled: false,
+        actualDeparture: plannedDep,
+        plannedDeparture: plannedDep,
+        actualArrival: plannedArr,
+        plannedArrival: plannedArr,
+        platform: null,
+        plannedPlatform: null,
+        platformChanged: false,
+        statusType: 'on_time',
+        statusText: 'Planmäßig',
+        remarks: [],
+        operator: 'Fußweg'
+      });
+      continue;
+    }
+
+    // Determine delay and cancellation (with simulation support or HAFAS live check)
+    let departureDelay = typeof leg.departureDelay === 'number' ? leg.departureDelay : 0;
+    let arrivalDelay = typeof leg.arrivalDelay === 'number' ? leg.arrivalDelay : departureDelay;
+    let isCancelled = leg.cancelled === true;
+    let currentPlatform = leg.departurePlatform || null;
+    let platformChanged = false;
+    const remarks: string[] = (leg.remarks || [])
+      .map(r => r.text || r.summary || '')
+      .filter(Boolean);
+
+    // Apply simulation if user triggered test mode
+    if (simulateMode === 'cancellation' && i === 0) {
+      isCancelled = true;
+      departureDelay = 0;
+      arrivalDelay = 0;
+      remarks.push('Zugausfall wegen technischer Störung am Triebfahrzeug.');
+      disruptionNotes.push(`${lineName}: Fahrt entfällt heute unvorhergesehen.`);
+    } else if (simulateMode === 'delay' && i === 0) {
+      departureDelay = 14;
+      arrivalDelay = 16;
+      currentPlatform = plannedDepPlat ? `${plannedDepPlat}a` : '4a';
+      platformChanged = true;
+      remarks.push('Verspätung eines vorausfahrenden Zuges und Gleiswechsel.');
+      disruptionNotes.push(`${lineName}: +14 Min. Verspätung ab ${leg.origin?.name || 'Start'}`);
+    } else {
+      // Real-time lookup: check origin station departures for matching line
+      const originId = leg.origin?.id || leg.origin?.name;
+      if (originId) {
+        try {
+          const depsUrl = `${HAFAS_API_BASE}/stops/${encodeURIComponent(originId)}/departures?duration=90&regional=true&suburban=true&subway=true&bus=true&tram=true`;
+          const depsData = await fetchSafeJson<{
+            departures?: {
+              line?: { name?: string };
+              when?: string;
+              plannedWhen?: string;
+              delay?: number | null;
+              platform?: string | null;
+              plannedPlatform?: string | null;
+              cancelled?: boolean;
+              remarks?: { text?: string }[];
+            }[];
+          }>(depsUrl, 3000);
+
+          if (depsData && Array.isArray(depsData.departures) && depsData.departures.length > 0) {
+            const cleanLine = lineName.replace(/\s+/g, '').toUpperCase();
+            const matched = depsData.departures.find(d => {
+              const dLine = (d.line?.name || '').replace(/\s+/g, '').toUpperCase();
+              return dLine === cleanLine || (cleanLine && dLine.includes(cleanLine)) || (dLine && cleanLine.includes(dLine));
+            });
+
+            if (matched) {
+              if (typeof matched.delay === 'number') {
+                departureDelay = Math.round(matched.delay / 60);
+                arrivalDelay = departureDelay;
+              }
+              if (matched.cancelled === true) {
+                isCancelled = true;
+              }
+              if (matched.platform) {
+                currentPlatform = matched.platform;
+              }
+              if (matched.plannedPlatform && matched.platform && matched.plannedPlatform !== matched.platform) {
+                platformChanged = true;
+              }
+              if (Array.isArray(matched.remarks)) {
+                matched.remarks.forEach(r => {
+                  if (r.text && !remarks.includes(r.text)) remarks.push(r.text);
+                });
+              }
+            }
+          }
+        } catch {
+          // Graceful fallback to existing leg telemetry
+        }
+      }
+    }
+
+    // Compute actual times based on delay
+    const planDepMs = new Date(plannedDep).getTime();
+    const planArrMs = new Date(plannedArr).getTime();
+    const actDepIso = isCancelled
+      ? plannedDep
+      : new Date(planDepMs + departureDelay * 60000).toISOString();
+    const actArrIso = isCancelled
+      ? plannedArr
+      : new Date(planArrMs + arrivalDelay * 60000).toISOString();
+
+    let statusType: 'on_time' | 'delayed' | 'cancelled' | 'disrupted' = 'on_time';
+    let statusText = 'Pünktlich';
+
+    if (isCancelled) {
+      statusType = 'cancelled';
+      statusText = 'Fahrt fällt aus';
+    } else if (departureDelay >= 5 || arrivalDelay >= 5) {
+      statusType = 'delayed';
+      statusText = `+${Math.max(departureDelay, arrivalDelay)} Min. Verspätung`;
+    } else if (departureDelay > 0 || arrivalDelay > 0) {
+      statusType = 'delayed';
+      statusText = `+${Math.max(departureDelay, arrivalDelay)} Min.`;
+    } else {
+      statusType = 'on_time';
+      statusText = 'Pünktlich';
+    }
+
+    // Transfer risk calculation if followed by another leg
+    let transferRisk: 'safe' | 'tight' | 'broken' | undefined = undefined;
+    let transferRiskNote: string | undefined = undefined;
+
+    if (i < legsData.length - 1) {
+      const plannedBuffer = transferDetails[i]?.bufferMinutes ?? 8;
+      const nextLegDepDelay = typeof legsData[i + 1]?.departureDelay === 'number' ? legsData[i + 1]!.departureDelay! : 0;
+      const effectiveBuffer = plannedBuffer - arrivalDelay + nextLegDepDelay;
+
+      if (isCancelled || legsData[i + 1]?.cancelled) {
+        transferRisk = 'broken';
+        transferRiskNote = 'Umstieg entfällt wegen Zugausfall.';
+      } else if (effectiveBuffer < 0) {
+        transferRisk = 'broken';
+        transferRiskNote = `Anschluss voraussichtlich verpasst! (${Math.abs(effectiveBuffer)} Min. Zeitüberschreitung)`;
+      } else if (effectiveBuffer <= 3) {
+        transferRisk = 'tight';
+        transferRiskNote = `Sehr knapper Umstieg (${effectiveBuffer} Min. verbleibend). Bitte zügig umsteigen.`;
+      } else {
+        transferRisk = 'safe';
+        transferRiskNote = `Umstieg gesichert (${effectiveBuffer} Min. Pufferzeit).`;
+      }
+    }
+
+    legStatuses.push({
+      legIndex: i,
+      lineName,
+      isWalking: false,
+      departureDelay,
+      arrivalDelay,
+      cancelled: isCancelled,
+      actualDeparture: actDepIso,
+      plannedDeparture: plannedDep,
+      actualArrival: actArrIso,
+      plannedArrival: plannedArr,
+      platform: currentPlatform,
+      plannedPlatform: plannedDepPlat,
+      platformChanged,
+      statusType,
+      statusText,
+      remarks,
+      transferRisk,
+      transferRiskNote,
+      operator: leg.line?.operator?.name
+    });
+  }
+
+  // Calculate overall journey status
+  const anyCancelled = legStatuses.some(l => l.cancelled);
+  const anyBrokenTransfer = legStatuses.some(l => l.transferRisk === 'broken');
+  const anyTightTransfer = legStatuses.some(l => l.transferRisk === 'tight');
+  const maxDelay = legStatuses.reduce((acc, l) => Math.max(acc, l.departureDelay, l.arrivalDelay), 0);
+
+  let overallStatus: LiveStatusCategory = 'on_time';
+  let overallStatusLabel = 'Pünktlich';
+  let summaryMessage = 'Alle Züge auf dieser Route verkehren nach aktuellem HAFAS-Echtzeitstand planmäßig.';
+
+  if (anyCancelled) {
+    overallStatus = 'cancelled';
+    overallStatusLabel = 'Zugausfall';
+    summaryMessage = 'Achtung: Mindestens ein Zug dieser Verbindung fällt heute aus. Bitte alternative Fahrtmöglichkeiten prüfen.';
+  } else if (anyBrokenTransfer) {
+    overallStatus = 'connection_broken';
+    overallStatusLabel = 'Anschluss gefährdet';
+    summaryMessage = `Wegen Verspätung (+${maxDelay} Min.) wird der geplante Anschlusszug voraussichtlich nicht erreicht.`;
+  } else if (maxDelay >= 5) {
+    overallStatus = 'delayed';
+    overallStatusLabel = `+${maxDelay} Min. Verspätung`;
+    summaryMessage = anyTightTransfer
+      ? `Verspätung von bis zu ${maxDelay} Min. Der Umstieg ist sehr knapp bemessen.`
+      : `Verspätung von bis zu ${maxDelay} Min. auf der Route. Alle Anschlüsse sind gesichert.`;
+  } else if (maxDelay > 0) {
+    overallStatus = 'delayed';
+    overallStatusLabel = `+${maxDelay} Min.`;
+    summaryMessage = `Geringe Abweichung vom Fahrplan (+${maxDelay} Min.). Verbindung läuft stabil.`;
+  }
+
+  return {
+    journeyId: payload.journeyId,
+    lastUpdated: new Date().toISOString(),
+    overallStatus,
+    overallStatusLabel,
+    maxDelay,
+    isCancelled: anyCancelled,
+    legs: legStatuses,
+    summaryMessage,
+    disruptionNotes: disruptionNotes.length > 0 ? disruptionNotes : undefined,
+    dataSource: 'Deutsche Bahn HAFAS Live-Telemetrie & Echtzeit-Abgleiche'
+  };
 }

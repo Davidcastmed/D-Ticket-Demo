@@ -203,3 +203,41 @@ export interface SearchQuery {
   includeFernverkehr: boolean;
   sortBy: 'fastest' | 'fewest-transfers' | 'departure' | 'arrival';
 }
+
+export type LiveStatusCategory = 'on_time' | 'delayed' | 'cancelled' | 'connection_broken';
+
+export interface LegLiveStatus {
+  legIndex: number;
+  lineName: string;
+  isWalking?: boolean;
+  departureDelay: number;
+  arrivalDelay: number;
+  cancelled: boolean;
+  partiallyCancelled?: boolean;
+  actualDeparture: string;
+  plannedDeparture: string;
+  actualArrival: string;
+  plannedArrival: string;
+  platform: string | null;
+  plannedPlatform: string | null;
+  platformChanged: boolean;
+  statusType: 'on_time' | 'delayed' | 'cancelled' | 'disrupted';
+  statusText: string;
+  remarks: string[];
+  transferRisk?: 'safe' | 'tight' | 'broken';
+  transferRiskNote?: string;
+  operator?: string;
+}
+
+export interface JourneyLiveStatusResponse {
+  journeyId?: string;
+  lastUpdated: string;
+  overallStatus: LiveStatusCategory;
+  overallStatusLabel: string;
+  maxDelay: number;
+  isCancelled: boolean;
+  legs: LegLiveStatus[];
+  summaryMessage: string;
+  disruptionNotes?: string[];
+  dataSource: string;
+}

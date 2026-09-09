@@ -13,10 +13,10 @@ import { TransitService } from '../../services/transit.service';
       <aside
         id="floating-pwa-install-motivator"
         aria-label="App auf dem Gerät installieren"
-        [class.bottom-[78px]]="isFooterVisible()"
-        [class.sm:bottom-[84px]]="isFooterVisible()"
-        [class.bottom-[28px]]="!isFooterVisible()"
-        [class.sm:bottom-[36px]]="!isFooterVisible()"
+        [class.bottom-[82px]]="isFooterVisible()"
+        [class.sm:bottom-[88px]]="isFooterVisible()"
+        [class.bottom-[24px]]="!isFooterVisible()"
+        [class.sm:bottom-[32px]]="!isFooterVisible()"
         class="fixed right-4 sm:right-6 z-40 flex items-center shadow-xl rounded-2xl overflow-hidden animate-in fade-in transition-all duration-300 pointer-events-auto"
       >
         <button

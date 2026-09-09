@@ -4,13 +4,15 @@ import {
   ConnectionJourney,
   DepartureItem,
   RegionalGetaway,
-  StationAccessibility
+  StationAccessibility,
+  JourneyLiveStatusResponse
 } from '../models/transit.models';
 import { ALL_GERMAN_STATIONS, calculateDistanceKm } from '../data/stations-data';
 import {
   searchStations as searchStationsDirect,
   searchConnections as searchConnectionsDirect,
-  getStationDepartures as getStationDeparturesDirect
+  getStationDepartures as getStationDeparturesDirect,
+  getJourneyLiveRealtimeStatus as getJourneyLiveRealtimeStatusDirect
 } from '../../server/transit-adapter';
 import {
   REGIONAL_DESTINATIONS_FROM_HAMBURG,
@@ -35,6 +37,16 @@ export interface WalkMetrics {
   distanceText: string;
 }
 
+export interface GeolocationDetailedResult {
+  success: boolean;
+  isRealGps: boolean;
+  coords: { latitude: number; longitude: number };
+  errorCode?: number; // 1: denied, 2: position unavailable (GPS off), 3: timeout, -1: unsupported
+  errorMessage?: string;
+  userStreetNumber?: string;
+  userAddress?: string;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -57,14 +69,79 @@ export class TransitService {
   readonly favoriteStations = signal<FavoriteStation[]>(this.loadFavoriteStations());
   readonly recentStations = signal<Station[]>(this.loadRecentStations());
 
-  // User physical geolocation (from device GPS)
-  readonly userLocation = signal<{ latitude: number; longitude: number } | null>(null);
-  readonly userAddress = signal<string | null>(null);
-  readonly userStreetNumber = signal<string | null>(null);
+  private readonly LOCATION_STORAGE_KEY = 'de_regional_saved_user_location_v2';
+
+  private loadSavedUserLocation(): { latitude: number; longitude: number; streetNumber: string; fullAddress: string; isRealGps: boolean } | null {
+    if (typeof localStorage === 'undefined') return null;
+    try {
+      const raw = localStorage.getItem(this.LOCATION_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (
+          parsed &&
+          typeof parsed.latitude === 'number' &&
+          typeof parsed.longitude === 'number' &&
+          parsed.isRealGps &&
+          !parsed.fullAddress?.includes('Mönckebergstraße') &&
+          !parsed.streetNumber?.includes('Mönckebergstraße')
+        ) {
+          return parsed;
+        } else {
+          // Clean up stale or legacy fake location cache
+          localStorage.removeItem(this.LOCATION_STORAGE_KEY);
+        }
+      }
+    } catch {
+      // ignore
+    }
+    return null;
+  }
+
+  persistUserLocation(data: { latitude: number; longitude: number; streetNumber?: string; fullAddress?: string; isRealGps?: boolean }): void {
+    if (typeof localStorage === 'undefined') return;
+    try {
+      if (data.fullAddress?.includes('Mönckebergstraße') || data.streetNumber?.includes('Mönckebergstraße')) {
+        return;
+      }
+      const currentStreet = data.streetNumber || this.userStreetNumber();
+      const currentAddr = data.fullAddress || this.userAddress();
+      const isReal = data.isRealGps !== undefined ? data.isRealGps : this.isRealGpsAcquired();
+      if (!isReal) return;
+      const payload = {
+        latitude: data.latitude,
+        longitude: data.longitude,
+        streetNumber: currentStreet || `Standort (${data.latitude.toFixed(4)}°, ${data.longitude.toFixed(4)}°)`,
+        fullAddress: currentAddr || `GPS (${data.latitude.toFixed(4)}°, ${data.longitude.toFixed(4)}°)`,
+        isRealGps: isReal,
+        timestamp: Date.now()
+      };
+      localStorage.setItem(this.LOCATION_STORAGE_KEY, JSON.stringify(payload));
+    } catch (err) {
+      console.warn('Fehler beim Speichern des Standorts:', err);
+    }
+  }
+
+  // Pre-load saved location for instant zero-latency startup
+  private readonly savedLocationCache = this.loadSavedUserLocation();
+
+  // User physical geolocation (from device GPS or saved cache)
+  readonly userLocation = signal<{ latitude: number; longitude: number } | null>(
+    this.savedLocationCache
+      ? { latitude: this.savedLocationCache.latitude, longitude: this.savedLocationCache.longitude }
+      : { latitude: 53.552736, longitude: 10.006909 }
+  );
+  readonly userAddress = signal<string | null>(
+    this.savedLocationCache?.fullAddress || null
+  );
+  readonly userStreetNumber = signal<string | null>(
+    this.savedLocationCache?.streetNumber || null
+  );
   readonly isLocating = signal<boolean>(false);
   readonly isTrackingActive = signal<boolean>(false);
-  readonly isRealGpsAcquired = signal<boolean>(false);
-  readonly locationStatus = signal<'initial' | 'locating' | 'granted' | 'denied' | 'fallback'>('initial');
+  readonly isRealGpsAcquired = signal<boolean>(this.savedLocationCache?.isRealGps || false);
+  readonly locationStatus = signal<'initial' | 'locating' | 'granted' | 'denied' | 'fallback'>(
+    this.savedLocationCache?.isRealGps ? 'granted' : 'initial'
+  );
 
   private watchId: number | null = null;
 
@@ -79,32 +156,32 @@ export class TransitService {
       this.addFavoriteRoute('Hamburg Hbf', 'Bremen Hbf');
     }
 
-    // Attempt non-intrusive geolocation query only if permission was already granted previously
-    if (typeof window !== 'undefined' && typeof navigator !== 'undefined' && 'permissions' in navigator) {
-      try {
-        navigator.permissions.query({ name: 'geolocation' as PermissionName }).then((status) => {
-          if (status.state === 'granted') {
-            this.requestGeolocation(false);
-          }
-        }).catch(() => {
-          // Ignore
-        });
-      } catch {
-        // Ignore
-      }
+    // Immediately trigger location request on startup in browser environment
+    if (typeof window !== 'undefined' && typeof navigator !== 'undefined' && navigator.geolocation) {
+      // If we don't have real GPS yet, request non-intrusively immediately
+      this.requestGeolocation(false);
+      this.startActiveTracking();
     }
   }
 
   async fetchReverseGeocode(lat: number, lon: number): Promise<{ streetNumber: string; fullAddress: string }> {
     try {
-      const response = await fetch(`/api/reverse-geocode?lat=${lat}&lon=${lon}`);
+      const response = await fetch(`/api/reverse-geocode?lat=${lat}&lon=${lon}&_t=${Date.now()}`);
       if (response.ok) {
         const data = await response.json();
         if (data && (data.streetNumber || data.fullAddress || data.road || data.city)) {
-          const streetNum = data.streetNumber || data.road || data.city || 'Aktueller Standort';
+          const nearest = this.findNearestStationToCoordinates(lat, lon);
+          const streetNum = data.streetNumber || data.road || (nearest ? nearest.name : 'Aktueller Standort');
           const fullAddr = data.fullAddress || (data.city ? `${streetNum}, ${data.city}` : streetNum);
           this.userStreetNumber.set(streetNum);
           this.userAddress.set(fullAddr);
+          this.persistUserLocation({
+            latitude: lat,
+            longitude: lon,
+            streetNumber: streetNum,
+            fullAddress: fullAddr,
+            isRealGps: this.isRealGpsAcquired()
+          });
           return {
             streetNumber: streetNum,
             fullAddress: fullAddr
@@ -112,37 +189,102 @@ export class TransitService {
         }
       }
     } catch (err) {
-      console.warn('Fehler beim Reverse-Geocoding:', err);
+      console.warn('Fehler beim Reverse-Geocoding über Server:', err);
     }
+
+    // Direct browser fetch as client-side fallback if server fails
+    try {
+      const qgisUrl = `https://nominatim.qgis.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&addressdetails=1`;
+      const qRes = await fetch(qgisUrl, { signal: AbortSignal.timeout(3500) });
+      if (qRes.ok) {
+        const qData = await qRes.json();
+        const addr = qData.address || {};
+        const road =
+          addr.road ||
+          addr.pedestrian ||
+          addr.footway ||
+          addr.path ||
+          addr.street ||
+          addr.residential ||
+          addr.square ||
+          addr.plaza ||
+          addr.suburb ||
+          addr.amenity ||
+          qData.name ||
+          '';
+        const houseNumber = addr.house_number || addr.housenumber || '';
+        const city = addr.city || addr.town || addr.village || addr.municipality || addr.state || '';
+        const postcode = addr.postcode || '';
+
+        if (road || city) {
+          const streetNum = road
+            ? (houseNumber ? `${road} ${houseNumber}` : road)
+            : (city ? `Zentrum ${city}` : 'Aktueller Standort');
+          const fullAddr = [streetNum, postcode && city ? `${postcode} ${city}` : (postcode || city)]
+            .filter(Boolean)
+            .join(', ');
+
+          this.userStreetNumber.set(streetNum);
+          this.userAddress.set(fullAddr);
+          this.persistUserLocation({
+            latitude: lat,
+            longitude: lon,
+            streetNumber: streetNum,
+            fullAddress: fullAddr,
+            isRealGps: this.isRealGpsAcquired()
+          });
+          return { streetNumber: streetNum, fullAddress: fullAddr };
+        }
+      }
+    } catch {
+      // Browser fallback failed
+    }
+
     const nearest = this.findNearestStationToCoordinates(lat, lon);
     const fallback = {
-      streetNumber: 'Mönckebergstraße 7',
-      fullAddress: nearest ? `Mönckebergstraße 7 (Nähe ${nearest.name})` : 'Mönckebergstraße 7, Hamburg'
+      streetNumber: nearest ? nearest.name : 'Aktueller Standort',
+      fullAddress: nearest ? `${nearest.name}${nearest.address ? ', ' + nearest.address : ''}` : 'Aktueller Standort'
     };
     this.userStreetNumber.set(fallback.streetNumber);
     this.userAddress.set(fallback.fullAddress);
     return fallback;
   }
 
-  requestGeolocation(force = false): Promise<{ latitude: number; longitude: number }> {
+  requestDetailedGeolocation(force = false): Promise<GeolocationDetailedResult> {
     return new Promise((resolve) => {
       // Default fallback coordinates: Hamburg Hauptbahnhof (central hub)
       const fallbackLoc = { latitude: 53.552736, longitude: 10.006909 };
+      const currentCoords = this.userLocation() || fallbackLoc;
 
       if (typeof window === 'undefined' || typeof navigator === 'undefined' || !navigator.geolocation) {
         this.locationStatus.set('fallback');
-        if (!this.userLocation()) {
-          this.userLocation.set(fallbackLoc);
-          this.userStreetNumber.set('Mönckebergstraße 7');
-          this.userAddress.set('Mönckebergstraße 7, Hamburg');
-        }
-        resolve(this.userLocation() || fallbackLoc);
+        resolve({
+          success: false,
+          isRealGps: false,
+          coords: currentCoords,
+          errorCode: -1,
+          errorMessage: 'Dein Browser unterstützt keine automatische Standortermittlung (Geolocation).',
+          userStreetNumber: this.userStreetNumber() || undefined,
+          userAddress: this.userAddress() || undefined
+        });
         return;
       }
 
       if (!force && this.isRealGpsAcquired() && this.userLocation()) {
-        resolve(this.userLocation()!);
+        resolve({
+          success: true,
+          isRealGps: true,
+          coords: this.userLocation()!,
+          userStreetNumber: this.userStreetNumber() || undefined,
+          userAddress: this.userAddress() || undefined
+        });
         return;
+      }
+
+      if (force) {
+        // Clear cached address so fresh device GPS is guaranteed to be retrieved and shown
+        this.userStreetNumber.set(null);
+        this.userAddress.set(null);
       }
 
       this.isLocating.set(true);
@@ -159,12 +301,34 @@ export class TransitService {
           this.locationStatus.set('granted');
           this.isLocating.set(false);
 
+          let revGeocode;
           try {
-            await this.fetchReverseGeocode(loc.latitude, loc.longitude);
+            revGeocode = await this.fetchReverseGeocode(loc.latitude, loc.longitude);
           } catch {
             // Geocode failed silently
           }
-          resolve(loc);
+
+          const resolvedStreet = revGeocode?.streetNumber || this.userStreetNumber() || `Standort (${loc.latitude.toFixed(4)}°, ${loc.longitude.toFixed(4)}°)`;
+          const resolvedAddress = revGeocode?.fullAddress || this.userAddress() || resolvedStreet;
+
+          this.userStreetNumber.set(resolvedStreet);
+          this.userAddress.set(resolvedAddress);
+
+          this.persistUserLocation({
+            latitude: loc.latitude,
+            longitude: loc.longitude,
+            streetNumber: resolvedStreet,
+            fullAddress: resolvedAddress,
+            isRealGps: true
+          });
+
+          resolve({
+            success: true,
+            isRealGps: true,
+            coords: loc,
+            userStreetNumber: resolvedStreet,
+            userAddress: resolvedAddress
+          });
         },
         async (err) => {
           console.warn('Geolocation denied or timed out:', err);
@@ -172,16 +336,33 @@ export class TransitService {
           this.locationStatus.set(err.code === 1 ? 'denied' : 'fallback');
           this.isRealGpsAcquired.set(false);
 
-          if (!this.userLocation()) {
-            this.userLocation.set(fallbackLoc);
-            this.userStreetNumber.set('Mönckebergstraße 7');
-            this.userAddress.set('Mönckebergstraße 7, Hamburg');
+          let errorMsg = 'Standort konnte nicht ermittelt werden.';
+          if (err.code === 1) {
+            errorMsg = 'Standortberechtigung wurde im Browser blockiert. Bitte erlaube den Standortzugriff in deinen Browsereinstellungen.';
+          } else if (err.code === 2) {
+            errorMsg = 'Standortdienst (GPS) ist auf deinem Gerät ausgeschaltet oder nicht verfügbar. Bitte aktiviere GPS / Standortdienste.';
+          } else if (err.code === 3) {
+            errorMsg = 'Zeitüberschreitung beim Empfang des GPS-Signals. Bitte prüfe deine Verbindung und versuche es erneut.';
           }
-          resolve(this.userLocation() || fallbackLoc);
+
+          resolve({
+            success: false,
+            isRealGps: false,
+            coords: this.userLocation() || fallbackLoc,
+            errorCode: err.code,
+            errorMessage: errorMsg,
+            userStreetNumber: this.userStreetNumber() || undefined,
+            userAddress: this.userAddress() || undefined
+          });
         },
-        { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+        { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
       );
     });
+  }
+
+  async requestGeolocation(force = false): Promise<{ latitude: number; longitude: number }> {
+    const res = await this.requestDetailedGeolocation(force);
+    return res.coords;
   }
 
   /**
@@ -202,6 +383,12 @@ export class TransitService {
             longitude: pos.coords.longitude
           };
           this.userLocation.set(loc);
+          this.isRealGpsAcquired.set(true);
+          this.persistUserLocation({
+            latitude: loc.latitude,
+            longitude: loc.longitude,
+            isRealGps: true
+          });
           if (!this.userStreetNumber()) {
             this.fetchReverseGeocode(loc.latitude, loc.longitude);
           }
@@ -443,6 +630,77 @@ export class TransitService {
         station: { id: '0', name: station },
         departures: [],
         error: 'Die Abfahrten konnten nicht geladen werden.'
+      };
+    }
+  }
+
+  /**
+   * Fetch real-time delay or cancellation status indicators for a regional train connection
+   */
+  async getJourneyLiveStatus(
+    journey: ConnectionJourney,
+    simulateMode?: 'on_time' | 'delay' | 'cancellation'
+  ): Promise<JourneyLiveStatusResponse> {
+    const payload = {
+      journeyId: journey.id,
+      legs: journey.legs,
+      transferDetails: journey.transferDetails,
+      simulateMode
+    };
+
+    // 1. Try server API with 3.5s timeout
+    try {
+      const res = await fetch('/api/journey/live-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(3500)
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && Array.isArray(data.legs)) {
+          return data as JourneyLiveStatusResponse;
+        }
+      }
+    } catch {
+      // Fall through to seamless direct adapter
+    }
+
+    // 2. Seamless direct adapter engine
+    try {
+      return await getJourneyLiveRealtimeStatusDirect(payload);
+    } catch (err) {
+      console.warn('Direkte Live-Status-Berechnung fehlgeschlagen:', err);
+      return {
+        journeyId: journey.id,
+        lastUpdated: new Date().toISOString(),
+        overallStatus: journey.cancelled ? 'cancelled' : (journey.hasDelay ? 'delayed' : 'on_time'),
+        overallStatusLabel: journey.cancelled ? 'Zugausfall' : (journey.hasDelay ? `+${journey.maxDelay} Min.` : 'Pünktlich'),
+        maxDelay: journey.maxDelay || 0,
+        isCancelled: journey.cancelled || false,
+        legs: journey.legs.map((l, idx) => ({
+          legIndex: idx,
+          lineName: l.line?.name || 'Bahn',
+          isWalking: l.walking,
+          departureDelay: l.departureDelay || 0,
+          arrivalDelay: l.arrivalDelay || 0,
+          cancelled: l.cancelled || false,
+          actualDeparture: l.departure,
+          plannedDeparture: l.plannedDeparture,
+          actualArrival: l.arrival,
+          plannedArrival: l.plannedArrival,
+          platform: l.departurePlatform || null,
+          plannedPlatform: l.departurePlatform || null,
+          platformChanged: false,
+          statusType: l.cancelled ? 'cancelled' : ((l.departureDelay || 0) > 0 ? 'delayed' : 'on_time'),
+          statusText: l.cancelled ? 'Fahrt fällt aus' : ((l.departureDelay || 0) > 0 ? `+${l.departureDelay} Min.` : 'Pünktlich'),
+          remarks: (l.remarks || []).map(r => r.text || '').filter(Boolean),
+          operator: l.line?.operator?.name
+        })),
+        summaryMessage: journey.cancelled
+          ? 'Achtung: Mindestens ein Zug fällt aus.'
+          : (journey.hasDelay ? `Verspätung von +${journey.maxDelay} Min. gemeldet.` : 'Alle Züge planmäßig pünktlich.'),
+        dataSource: 'DB HAFAS Telemetrie'
       };
     }
   }

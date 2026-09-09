@@ -87,6 +87,23 @@ export class App {
     return this.currentTab() === 'planner' && this.transitService.hasPlannerResults();
   });
 
+  readonly currentLocationDisplay = computed<string>(() => {
+    const street = this.transitService.userStreetNumber();
+    if (street && street !== 'Aktueller Standort' && street !== 'Hamburg Hbf') {
+      return street;
+    }
+    const addr = this.transitService.userAddress();
+    if (addr && addr !== 'Aktueller Standort' && addr !== 'Hamburg Hbf') {
+      return addr.split(',')[0].trim();
+    }
+    const loc = this.transitService.userLocation();
+    if (this.transitService.isRealGpsAcquired() && loc) {
+      const nearest = this.transitService.findNearestStationToCoordinates(loc.latitude, loc.longitude);
+      return nearest ? `Nähe ${nearest.name}` : 'GPS aktiv';
+    }
+    return 'Standort bereit';
+  });
+
   navigateToHome(): void {
     this.transitService.activeTab.set('planner');
     this.transitService.hasPlannerResults.set(false);

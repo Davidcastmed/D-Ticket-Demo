@@ -446,8 +446,29 @@ export class StationInput {
     }
 
     const list = this.displayedSuggestions();
+
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      if (list.length > 0) {
+        const curr = this.highlightedIndex();
+        const target = (curr >= 0 && curr < list.length) ? list[curr] : list[0];
+        this.selectStation(target);
+        return;
+      }
+      const direct = ALL_GERMAN_STATIONS.find(s => s.name.toLowerCase() === q.toLowerCase());
+      if (direct) {
+        this.selectStation(direct);
+        return;
+      }
+      this.selectStation({
+        id: 'station-' + Date.now(),
+        name: this.searchQuery().trim()
+      });
+      return;
+    }
+
     if (!this.isOpen() || list.length === 0) {
-      if (event.key === 'ArrowDown' || event.key === 'Enter') {
+      if (event.key === 'ArrowDown') {
         this.isOpen.set(true);
       }
       return;
@@ -461,14 +482,6 @@ export class StationInput {
       event.preventDefault();
       const prevIdx = this.highlightedIndex() <= 0 ? list.length - 1 : this.highlightedIndex() - 1;
       this.highlightedIndex.set(prevIdx);
-    } else if (event.key === 'Enter') {
-      event.preventDefault();
-      const curr = this.highlightedIndex();
-      if (curr >= 0 && curr < list.length) {
-        this.selectStation(list[curr]);
-      } else if (list.length > 0) {
-        this.selectStation(list[0]);
-      }
     } else if (event.key === 'Escape') {
       this.isOpen.set(false);
       this.highlightedIndex.set(-1);

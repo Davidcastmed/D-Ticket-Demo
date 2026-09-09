@@ -32,102 +32,110 @@ function calculateBearing(lat1: number, lon1: number, lat2: number, lon2: number
   imports: [CommonModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="relative w-full h-full min-h-[220px] rounded-2xl overflow-hidden shadow-inner border border-[#E6DED6]">
+    <div
+      class="relative w-full h-full min-h-[140px] overflow-hidden"
+      [class.rounded-2xl]="!isFullBleed"
+      [class.shadow-inner]="!isFullBleed"
+      [class.border]="!isFullBleed"
+      [class.border-[#E6DED6]]="!isFullBleed"
+    >
       <!-- Leaflet map container -->
-      <div #mapContainer class="w-full h-full min-h-[220px] z-0" role="region" aria-label="Interaktive Streckenkarte"></div>
+      <div #mapContainer class="w-full h-full min-h-[140px] z-0" role="region" aria-label="Interaktive Streckenkarte"></div>
 
-      <!-- Walking Route Focus Overlay Banner (When focused on walking) -->
-      @if (isWalkingFocused() && hasWalkingData()) {
-        <div class="absolute top-2 left-2 right-12 bg-white/95 backdrop-blur-md rounded-xl p-2.5 shadow-md border border-[#B7E4C7] z-[400] flex items-center justify-between gap-2 animate-in fade-in duration-150" role="status">
-          <div class="flex items-center gap-2 min-w-0">
-            <div class="w-7 h-7 rounded-full bg-[#1A73E8] text-white flex items-center justify-center shrink-0 shadow-xs" aria-hidden="true">
-              <span class="mat-icon text-sm">near_me</span>
+      @if (!hideDefaultOverlays) {
+        <!-- Walking Route Focus Overlay Banner (When focused on walking) -->
+        @if (isWalkingFocused() && hasWalkingData()) {
+          <div class="absolute top-2 left-2 right-12 bg-white/95 backdrop-blur-md rounded-xl p-2.5 shadow-md border border-[#B7E4C7] z-[400] flex items-center justify-between gap-2 animate-in fade-in duration-150" role="status">
+            <div class="flex items-center gap-2 min-w-0">
+              <div class="w-7 h-7 rounded-full bg-[#1A73E8] text-white flex items-center justify-center shrink-0 shadow-xs" aria-hidden="true">
+                <span class="mat-icon text-sm">near_me</span>
+              </div>
+              <div class="min-w-0">
+                <div class="text-xs font-black text-[#1B4332] truncate">
+                  Fußweg zum Startbahnhof
+                </div>
+                <div class="text-[11px] text-[#2D6A4F] font-bold truncate">
+                  ca. {{ activeJourney?.walkToStartMinutes || 5 }} Min. • {{ formatDistance(activeJourney?.walkToStartDistanceMeters) }}
+                </div>
+              </div>
             </div>
-            <div class="min-w-0">
-              <div class="text-xs font-black text-[#1B4332] truncate">
-                Fußweg zum Startbahnhof
-              </div>
-              <div class="text-[11px] text-[#2D6A4F] font-bold truncate">
-                ca. {{ activeJourney?.walkToStartMinutes || 5 }} Min. • {{ formatDistance(activeJourney?.walkToStartDistanceMeters) }}
-              </div>
+
+            <button
+              type="button"
+              id="btn-show-full-route-from-walk"
+              (click)="showFullRoute()"
+              class="px-2 py-1 bg-[#FAF7F2] hover:bg-[#EDE5DC] text-[#4E342E] border border-[#D7CCC8] rounded-lg text-[10px] font-black shrink-0 cursor-pointer shadow-2xs transition-colors flex items-center gap-1"
+              title="Ganze Zugstrecke anzeigen"
+              aria-label="Ganze Zugstrecke auf der Karte anzeigen"
+            >
+              <span class="mat-icon text-xs" aria-hidden="true">train</span>
+              <span>Zugstrecke</span>
+            </button>
+          </div>
+        }
+
+        <!-- Map Legend & Controls Overlay -->
+        <div class="absolute bottom-2 left-2 bg-white/95 backdrop-blur-sm rounded-xl p-2 shadow-md border border-[#E6DED6] text-xs z-[400] flex flex-col gap-1 max-w-[240px]" role="note" aria-label="Kartenlegende">
+          <div class="flex items-center justify-between gap-2 text-[10px]">
+            <div class="flex items-center gap-1">
+              <span class="inline-block w-2 h-2 rounded-full bg-[#2D6A4F]" aria-hidden="true"></span>
+              <span class="font-bold text-[#1F1612]">Kommend</span>
+            </div>
+            <div class="flex items-center gap-1">
+              <span class="inline-block w-2 h-2 rounded-full bg-[#8D6E63] opacity-50" aria-hidden="true"></span>
+              <span class="font-bold text-[#795548]">Passiert</span>
+            </div>
+            <div class="flex items-center gap-1">
+              <span class="inline-block w-2 h-2 rounded-full bg-[#1B4332] animate-ping" aria-hidden="true"></span>
+              <span class="font-bold text-[#1B4332]">Live</span>
             </div>
           </div>
+          @if (activeJourney) {
+            <div class="pt-1 border-t border-[#EDE5DC] font-bold text-[#4E342E] flex items-center justify-between text-[11px]">
+              <span class="truncate">{{ activeJourney.origin.name }}</span>
+              <span class="text-[#8D6E63] mx-1" aria-hidden="true">→</span>
+              <span class="truncate">{{ activeJourney.destination.name }}</span>
+            </div>
+          }
+        </div>
 
+        <!-- Quick Action Controls (Top Right) -->
+        <div class="absolute top-2 right-2 flex flex-col gap-1.5 z-[400]" role="toolbar" aria-label="Kartensteuerung">
+          @if (hasWalkingData()) {
+            <button
+              type="button"
+              id="btn-focus-walk-map"
+              (click)="toggleWalkFocus()"
+              class="px-2.5 py-1.5 rounded-xl shadow-md border text-[11px] font-black transition-all cursor-pointer flex items-center gap-1"
+              [class.bg-[#1B4332]]="isWalkingFocused()"
+              [class.text-white]="isWalkingFocused()"
+              [class.border-[#132A1E]]="isWalkingFocused()"
+              [class.bg-white]="!isWalkingFocused()"
+              [class.text-[#1B4332]]="!isWalkingFocused()"
+              [class.border-[#B7E4C7]]="!isWalkingFocused()"
+              title="Fußweg vom Standort zum Bahnhof vergrößern"
+              [attr.aria-pressed]="isWalkingFocused()"
+              aria-label="Fußweg zum Bahnhof auf der Karte fokussieren"
+            >
+              <span class="mat-icon text-xs" aria-hidden="true">directions_walk</span>
+              <span>Fußweg</span>
+            </button>
+          }
+
+          <!-- Center / Full Route Button -->
           <button
             type="button"
-            id="btn-show-full-route-from-walk"
-            (click)="showFullRoute()"
-            class="px-2 py-1 bg-[#FAF7F2] hover:bg-[#EDE5DC] text-[#4E342E] border border-[#D7CCC8] rounded-lg text-[10px] font-black shrink-0 cursor-pointer shadow-2xs transition-colors flex items-center gap-1"
-            title="Ganze Zugstrecke anzeigen"
-            aria-label="Ganze Zugstrecke auf der Karte anzeigen"
+            id="btn-center-map"
+            (click)="resetMapView()"
+            class="bg-white/95 hover:bg-white text-[#4E342E] px-2.5 py-1.5 rounded-xl shadow-md border border-[#E6DED6] transition-all cursor-pointer flex items-center gap-1 text-[11px] font-bold"
+            title="Gesamte Route anzeigen"
+            aria-label="Gesamte Routenübersicht auf der Karte zentrieren"
           >
-            <span class="mat-icon text-xs" aria-hidden="true">train</span>
-            <span>Zugstrecke</span>
+            <span class="mat-icon text-xs" aria-hidden="true">filter_center_focus</span>
+            <span>Übersicht</span>
           </button>
         </div>
       }
-
-      <!-- Map Legend & Controls Overlay -->
-      <div class="absolute bottom-2 left-2 bg-white/95 backdrop-blur-sm rounded-xl p-2 shadow-md border border-[#E6DED6] text-xs z-[400] flex flex-col gap-1 max-w-[240px]" role="note" aria-label="Kartenlegende">
-        <div class="flex items-center justify-between gap-2 text-[10px]">
-          <div class="flex items-center gap-1">
-            <span class="inline-block w-2 h-2 rounded-full bg-[#2D6A4F]" aria-hidden="true"></span>
-            <span class="font-bold text-[#1F1612]">Kommend</span>
-          </div>
-          <div class="flex items-center gap-1">
-            <span class="inline-block w-2 h-2 rounded-full bg-[#8D6E63] opacity-50" aria-hidden="true"></span>
-            <span class="font-bold text-[#795548]">Passiert</span>
-          </div>
-          <div class="flex items-center gap-1">
-            <span class="inline-block w-2 h-2 rounded-full bg-[#1B4332] animate-ping" aria-hidden="true"></span>
-            <span class="font-bold text-[#1B4332]">Live</span>
-          </div>
-        </div>
-        @if (activeJourney) {
-          <div class="pt-1 border-t border-[#EDE5DC] font-bold text-[#4E342E] flex items-center justify-between text-[11px]">
-            <span class="truncate">{{ activeJourney.origin.name }}</span>
-            <span class="text-[#8D6E63] mx-1" aria-hidden="true">→</span>
-            <span class="truncate">{{ activeJourney.destination.name }}</span>
-          </div>
-        }
-      </div>
-
-      <!-- Quick Action Controls (Top Right) -->
-      <div class="absolute top-2 right-2 flex flex-col gap-1.5 z-[400]" role="toolbar" aria-label="Kartensteuerung">
-        @if (hasWalkingData()) {
-          <button
-            type="button"
-            id="btn-focus-walk-map"
-            (click)="toggleWalkFocus()"
-            class="px-2.5 py-1.5 rounded-xl shadow-md border text-[11px] font-black transition-all cursor-pointer flex items-center gap-1"
-            [class.bg-[#1B4332]]="isWalkingFocused()"
-            [class.text-white]="isWalkingFocused()"
-            [class.border-[#132A1E]]="isWalkingFocused()"
-            [class.bg-white]="!isWalkingFocused()"
-            [class.text-[#1B4332]]="!isWalkingFocused()"
-            [class.border-[#B7E4C7]]="!isWalkingFocused()"
-            title="Fußweg vom Standort zum Bahnhof vergrößern"
-            [attr.aria-pressed]="isWalkingFocused()"
-            aria-label="Fußweg zum Bahnhof auf der Karte fokussieren"
-          >
-            <span class="mat-icon text-xs" aria-hidden="true">directions_walk</span>
-            <span>Fußweg</span>
-          </button>
-        }
-
-        <!-- Center / Full Route Button -->
-        <button
-          type="button"
-          id="btn-center-map"
-          (click)="resetMapView()"
-          class="bg-white/95 hover:bg-white text-[#4E342E] px-2.5 py-1.5 rounded-xl shadow-md border border-[#E6DED6] transition-all cursor-pointer flex items-center gap-1 text-[11px] font-bold"
-          title="Gesamte Route anzeigen"
-          aria-label="Gesamte Routenübersicht auf der Karte zentrieren"
-        >
-          <span class="mat-icon text-xs" aria-hidden="true">filter_center_focus</span>
-          <span>Übersicht</span>
-        </button>
-      </div>
 
     </div>
   `
@@ -137,6 +145,8 @@ export class MapView implements OnInit, OnChanges, OnDestroy {
   @Input() activeJourney: ConnectionJourney | null = null;
   @Input() selectedStation: Station | null = null;
   @Input() focusTarget: 'all' | 'walk' | 'route' = 'all';
+  @Input() isFullBleed = false;
+  @Input() hideDefaultOverlays = false;
 
   readonly isWalkingFocused = signal<boolean>(false);
 
@@ -147,6 +157,7 @@ export class MapView implements OnInit, OnChanges, OnDestroy {
   private routeLayer: import('leaflet').LayerGroup | null = null;
   private isBrowser = false;
   private currentHeading: number | null = null;
+  private resizeObserver: ResizeObserver | null = null;
 
   private orientationHandler = (e: DeviceOrientationEvent) => {
     let heading: number | null = null;
@@ -208,6 +219,10 @@ export class MapView implements OnInit, OnChanges, OnDestroy {
     if (this.isBrowser && typeof window !== 'undefined') {
       window.removeEventListener('deviceorientation', this.orientationHandler);
     }
+    if (this.resizeObserver) {
+      this.resizeObserver.disconnect();
+      this.resizeObserver = null;
+    }
     if (this.map) {
       this.map.remove();
       this.map = null;
@@ -218,6 +233,67 @@ export class MapView implements OnInit, OnChanges, OnDestroy {
     if (!meters) return 'ca. 400 m';
     if (meters < 1000) return `${meters} m`;
     return `${(meters / 1000).toFixed(1)} km`;
+  }
+
+  public invalidateSize(): void {
+    if (this.map) {
+      this.map.invalidateSize();
+    }
+  }
+
+  public focusStep(stepIndex: number): void {
+    if (!this.map || !this.activeJourney) return;
+    const journey = this.activeJourney;
+
+    // Step 0: Walking from start to first station
+    if (stepIndex === 0) {
+      this.isWalkingFocused.set(true);
+      const userLoc = this.transitService.userLocation();
+      const firstStationLoc = journey.legs[0]?.origin?.location;
+      if (userLoc && firstStationLoc) {
+        this.map.fitBounds([
+          [userLoc.latitude, userLoc.longitude],
+          [firstStationLoc.latitude, firstStationLoc.longitude]
+        ], { padding: [50, 50], maxZoom: 17, animate: true });
+        return;
+      } else if (firstStationLoc) {
+        this.map.setView([firstStationLoc.latitude, firstStationLoc.longitude], 15, { animate: true });
+        return;
+      }
+    }
+
+    // Step 1 to N: Transit legs (stepIndex 1 corresponds to leg 0)
+    const legIdx = stepIndex - 1;
+    if (legIdx >= 0 && legIdx < journey.legs.length) {
+      this.isWalkingFocused.set(false);
+      const leg = journey.legs[legIdx];
+      const coords: [number, number][] = [];
+      if (leg.origin.location) coords.push([leg.origin.location.latitude, leg.origin.location.longitude]);
+      if (leg.stopovers) {
+        for (const s of leg.stopovers) {
+          if (s.stop?.location) coords.push([s.stop.location.latitude, s.stop.location.longitude]);
+        }
+      }
+      if (leg.destination.location) coords.push([leg.destination.location.latitude, leg.destination.location.longitude]);
+
+      if (coords.length >= 2) {
+        this.map.fitBounds(coords, { padding: [50, 50], maxZoom: 14, animate: true });
+        return;
+      } else if (coords.length === 1) {
+        this.map.setView(coords[0], 14, { animate: true });
+        return;
+      }
+    }
+
+    // Step N + 1: Final arrival / Destination
+    if (stepIndex === journey.legs.length + 1 && journey.destination.location) {
+      this.isWalkingFocused.set(false);
+      this.map.setView([journey.destination.location.latitude, journey.destination.location.longitude], 15, { animate: true });
+      return;
+    }
+
+    // Default overview
+    this.resetMapView();
   }
 
   toggleWalkFocus() {
@@ -264,6 +340,16 @@ export class MapView implements OnInit, OnChanges, OnDestroy {
 
       this.markersLayer = L.layerGroup().addTo(this.map);
       this.routeLayer = L.layerGroup().addTo(this.map);
+
+      // Attach ResizeObserver to automatically resize leaflet when container changes
+      if (typeof ResizeObserver !== 'undefined' && this.mapContainer?.nativeElement) {
+        this.resizeObserver = new ResizeObserver(() => {
+          if (this.map) {
+            this.map.invalidateSize();
+          }
+        });
+        this.resizeObserver.observe(this.mapContainer.nativeElement);
+      }
 
       this.renderRouteAndMarkers();
 

@@ -1,0 +1,684 @@
+@if (journey) {
+  <!-- Fullscreen Modal Container with Split-View (Map at Top, Connections at Bottom) -->
+  <div
+    class="fixed inset-0 z-50 bg-[#FAF7F2] overflow-hidden flex flex-col text-[#1F1612] select-none"
+    role="dialog"
+    aria-modal="true"
+    [attr.aria-label]="'Fahrtdetails von ' + journey.origin.name + ' nach ' + journey.destination.name"
+  >
+
+    <!-- ========================================== -->
+    <!-- 1. TOP PANE: INTERACTIVE LEAFLET MAP VIEW -->
+    <!-- ========================================== -->
+    <div
+      class="relative w-full overflow-hidden shrink-0 transition-[height] duration-75"
+      [style.height]="'calc(100% - ' + sheetHeightPercent() + '%)'"
+      style="min-height: 120px;"
+    >
+      <!-- Leaflet Map edge-to-edge -->
+      <app-map-view
+        #mapViewComponent
+        [activeJourney]="journey"
+        [selectedStation]="journey.destination"
+        [isFullBleed]="true"
+        [hideDefaultOverlays]="true"
+      ></app-map-view>
+
+      <!-- Floating Circular Back Button (Matching HVV Switch / Google Maps top-left) -->
+      <button
+        type="button"
+        id="btn-journey-detail-back"
+        (click)="closeModal.emit()"
+        class="absolute top-4 left-4 z-[450] w-11 h-11 rounded-full bg-white shadow-md border border-[#E0E0E0] hover:bg-[#FAF7F2] active:scale-95 flex items-center justify-center text-[#1F1612] cursor-pointer transition-all"
+        title="Zurück zur Verbindungssuche"
+        aria-label="Fahrtdetails schließen und zur Suche zurückkehren"
+      >
+        <span class="mat-icon text-2xl text-[#1F1612]">arrow_back</span>
+      </button>
+
+      <!-- Floating Trajectory Guidance Pill (HVV Switch step indicator: e.g. "🚶 9 min – 570m") -->
+      <div class="absolute top-4 left-18 sm:left-20 right-4 sm:right-auto z-[450] flex items-center gap-2">
+        <div class="bg-[#1F1612]/92 backdrop-blur-md text-white px-3.5 py-2 rounded-full shadow-lg flex items-center gap-2.5 text-xs font-bold border border-white/10 max-w-[calc(100vw-120px)] sm:max-w-md">
+          <!-- Step Icon & Text -->
+          <div class="flex items-center gap-1.5 min-w-0 truncate">
+            @if (currentStep() === 0) {
+              <span class="mat-icon text-sm text-[#52B788]">directions_walk</span>
+              <span class="truncate">Gehe {{ getWalkDistanceMeters(journey) }}m ({{ getFirstWalkMinutes(journey) }} min)</span>
+            } @else if (currentStep() <= journey.legs.length) {
+              @let leg = journey.legs[currentStep() - 1];
+              <span class="mat-icon text-sm text-[#52B788]">
+                {{ leg.line?.product === 'bus' ? 'directions_bus' : 'train' }}
+              </span>
+              <span class="truncate">{{ leg.line?.name || 'Linie' }} nach {{ leg.direction || leg.destination.name }}</span>
+            } @else {
+              <span class="mat-icon text-sm text-[#52B788]">place</span>
+              <span class="truncate">Ziel: {{ journey.destination.name }}</span>
+            }
+          </div>
+
+          <!-- Step navigation arrows (< and >) -->
+          <div class="flex items-center gap-0.5 pl-1.5 border-l border-white/20 shrink-0">
+            <button
+              type="button"
+              (click)="prevStep()"
+              [disabled]="currentStep() <= 0"
+              class="w-6 h-6 rounded-full hover:bg-white/20 disabled:opacity-30 flex items-center justify-center cursor-pointer transition-colors"
+              title="Vorheriger Schritt"
+              aria-label="Vorheriger Schritt"
+            >
+              <span class="mat-icon text-sm">chevron_left</span>
+            </button>
+            <span class="text-[10px] text-white/70 font-mono px-0.5">{{ currentStep() + 1 }}/{{ totalSteps() }}</span>
+            <button
+              type="button"
+              (click)="nextStep()"
+              [disabled]="currentStep() >= totalSteps() - 1"
+              class="w-6 h-6 rounded-full hover:bg-white/20 disabled:opacity-30 flex items-center justify-center cursor-pointer transition-colors"
+              title="Nächster Schritt"
+              aria-label="Nächster Schritt"
+            >
+              <span class="mat-icon text-sm">chevron_right</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Full Route Overview Reset Button -->
+        <button
+          type="button"
+          (click)="focusAllRoute()"
+          class="w-9 h-9 rounded-full bg-white/95 shadow-md border border-[#E0E0E0] hover:bg-white flex items-center justify-center text-[#1F1612] cursor-pointer shrink-0 transition-transform active:scale-95"
+          title="Ganze Route anzeigen"
+          aria-label="Ganze Route auf der Karte zentrieren"
+        >
+          <span class="mat-icon text-base">crop_free</span>
+        </button>
+      </div>
+
+      <!-- Quick Toggle button on bottom right of the map -->
+      <button
+        type="button"
+        (click)="toggleSheetHeight()"
+        class="absolute bottom-4 right-4 z-[450] bg-white/95 hover:bg-white shadow-md border border-[#E0E0E0] px-3 py-1.5 rounded-full text-xs font-bold text-[#1F1612] flex items-center gap-1.5 cursor-pointer transition-all active:scale-95"
+        title="Verbindungen vergrößern oder verkleinern"
+        aria-label="Verbindungen in der Höhe anpassen"
+      >
+        <span class="mat-icon text-sm">
+          {{ sheetHeightPercent() > 60 ? 'expand_more' : 'expand_less' }}
+        </span>
+        <span class="hidden sm:inline">
+          {{ sheetHeightPercent() > 60 ? 'Mehr Karte' : 'Mehr Verbindungen' }}
+        </span>
+      </button>
+    </div>
+
+    <!-- ============================================================== -->
+    <!-- 2. BOTTOM PANE: RESIZABLE BOTTOM SHEET / CONNECTIONS LIST PANEL -->
+    <!-- ============================================================== -->
+    <div
+      class="relative w-full bg-white rounded-t-[28px] shadow-[0_-8px_30px_rgba(0,0,0,0.12)] border-t border-[#E5E5E5] flex flex-col overflow-hidden transition-[height] duration-75"
+      [style.height]="sheetHeightPercent() + '%'"
+      style="min-height: 22%; max-height: 88%;"
+    >
+      <!-- Draggable Handle Bar (Allows moving either map or connections) -->
+      <div
+        class="w-full flex flex-col items-center justify-center pt-2.5 pb-2 cursor-grab active:cursor-grabbing select-none touch-none hover:bg-black/2 transition-colors shrink-0"
+        (pointerdown)="onDragStart($event)"
+        (pointermove)="onDragMove($event)"
+        (pointerup)="onDragEnd($event)"
+        (pointercancel)="onDragEnd($event)"
+        (dblclick)="toggleSheetHeight()"
+        title="Ziehen, um die Höhe anzupassen"
+        aria-label="Verbindungspanel verschieben"
+      >
+        <div class="w-12 h-1.5 bg-[#D0C9C0] hover:bg-[#8D6E63] rounded-full transition-colors"></div>
+      </div>
+
+      <!-- Pinned Header (Authentic HVV Switch design matching user's screenshot) -->
+      <div class="px-5 sm:px-6 pb-3 border-b border-[#F0F0F0] shrink-0 space-y-3 select-text">
+        <!-- Top Row: Departure title, Arrival subtitle with live icon, and Pin button -->
+        <div class="flex items-start justify-between gap-3">
+          <div class="min-w-0 space-y-0.5">
+            <!-- "um [Uhrzeit] losgehen" (or "Jetzt losgehen") -->
+            <div class="text-xl sm:text-2xl font-black text-[#1F1612] tracking-tight leading-tight">
+              um {{ formatTime(journey.departure) }} losgehen
+            </div>
+
+            <!-- "Ankunft [Uhrzeit] [Live-Symbol] | [Dauer]" -->
+            <div class="flex items-center gap-1.5 text-sm sm:text-base font-bold text-[#1F1612]">
+              <span>Ankunft {{ formatTime(journey.arrival) }}</span>
+
+              <!-- Live Telemetry Waves Icon -->
+              <svg class="w-4 h-4 text-[#1F1612] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-label="Echtzeitdaten aktiv">
+                <path d="M5 12.55a11 11 0 0 1 14.08 0"/>
+                <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
+                <circle cx="12" cy="20" r="1" fill="currentColor"/>
+              </svg>
+
+              <span class="text-[#BDBDBD] font-light select-none px-0.5">|</span>
+              <span>{{ formatHvvDuration(journey.durationMinutes) }}</span>
+            </div>
+
+            <!-- Refresh Status: "Aktualisiert: Jetzt" -->
+            <button
+              type="button"
+              id="btn-refresh-live-status"
+              (click)="fetchRealtimeStatus('live')"
+              [disabled]="isLoadingLiveStatus()"
+              class="flex items-center gap-1 text-xs text-[#0066CC] hover:underline cursor-pointer pt-0.5"
+              title="Echtzeitdaten neu laden"
+              aria-label="Echtzeitdaten aktualisieren"
+            >
+              <span class="mat-icon text-sm" [class.animate-spin]="isLoadingLiveStatus()">refresh</span>
+              <span>Aktualisiert: {{ lastRefreshText() }}</span>
+            </button>
+          </div>
+
+          <!-- Right Pin / Bookmark Button (Matching screenshot) -->
+          <button
+            type="button"
+            id="btn-pin-route"
+            (click)="togglePin()"
+            class="w-11 h-11 rounded-full border border-[#E0E0E0] shadow-2xs bg-white hover:bg-[#FAF7F2] active:scale-95 flex items-center justify-center cursor-pointer transition-all shrink-0"
+            [class.border-[#1B4332]]="isPinned()"
+            [class.bg-[#EDF9F0]]="isPinned()"
+            title="{{ isPinned() ? 'Verbindung aus Favoriten entfernen' : 'Verbindung anpinnen' }}"
+            aria-label="Verbindung zu Favoriten hinzufügen"
+          >
+            <span class="mat-icon text-xl" [class.text-[#1B4332]]="isPinned()" [class.text-[#1F1612]]="!isPinned()">
+              {{ isPinned() ? 'bookmark' : 'push_pin' }}
+            </span>
+          </button>
+        </div>
+
+        <!-- Full-Width "Ticket kaufen" Action Button (Matching screenshot) -->
+        <button
+          type="button"
+          id="btn-buy-ticket-action"
+          (click)="openTicketModal()"
+          class="w-full py-3 px-4 rounded-full border-2 border-[#1F1612] bg-white hover:bg-[#FAF7F2] active:bg-[#F0ECE1] text-[#1F1612] font-black text-sm sm:text-base tracking-wide shadow-2xs transition-colors cursor-pointer text-center flex items-center justify-center gap-2"
+        >
+          <span class="mat-icon text-lg">confirmation_number</span>
+          <span>Ticket kaufen</span>
+        </button>
+      </div>
+
+      <!-- ========================================================= -->
+      <!-- 3. MAIN SCROLLABLE TIMELINE (CONNECTIONS & TRANSIT STEPS) -->
+      <!-- ========================================================= -->
+      <main class="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-4 select-text">
+
+        <!-- STEP 0: START WALKING SECTION -->
+        <div
+          class="flex items-start gap-4 p-2 rounded-2xl transition-colors cursor-pointer hover:bg-[#FAF7F2]"
+          (click)="goToStep(0)"
+          role="button"
+          tabindex="0"
+          title="Auf der Karte anzeigen"
+          aria-label="Fußweg zum Startbahnhof auf der Karte anzeigen"
+        >
+          <!-- Left column: Start time & vertical dotted connector -->
+          <div class="w-16 sm:w-20 shrink-0 flex flex-col items-start">
+            <span class="text-xl sm:text-2xl font-black text-[#1F1612] tracking-tight">
+              {{ formatTime(journey.departure) }}
+            </span>
+
+            <!-- Vertical dotted line -->
+            <div class="flex flex-col items-center pl-4 py-2 space-y-1.5">
+              <span class="w-1.5 h-1.5 rounded-full bg-[#1F1612]"></span>
+              <span class="w-1.5 h-1.5 rounded-full bg-[#1F1612]"></span>
+              <span class="w-1.5 h-1.5 rounded-full bg-[#1F1612]"></span>
+              <span class="w-1.5 h-1.5 rounded-full bg-[#1F1612]"></span>
+              <span class="w-1.5 h-1.5 rounded-full bg-[#1F1612]"></span>
+            </div>
+          </div>
+
+          <!-- Right column: Address, Start label & Walking duration -->
+          <div class="flex-1 min-w-0 pt-0.5 space-y-1">
+            @let originAddr = splitStationAddress(getOriginAddressLabel(journey));
+            <div class="text-base sm:text-lg font-bold text-[#1F1612] leading-snug">
+              <div>{{ originAddr.line1 }}</div>
+              @if (originAddr.line2) {
+                <div>{{ originAddr.line2 }}</div>
+              }
+            </div>
+            <div class="text-xs sm:text-sm text-[#757575] font-normal">
+              Start
+            </div>
+
+            <div class="flex items-center gap-2 text-sm sm:text-base font-semibold text-[#1F1612] pt-1">
+              <span class="mat-icon text-lg text-[#1F1612]">directions_walk</span>
+              <span>Gehe {{ getWalkDistanceMeters(journey) }} Meter ({{ getFirstWalkMinutes(journey) }} min)</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- TRANSIT LEGS CARDS (BUS, TRAIN, S-BAHN, U-BAHN) -->
+        @for (leg of journey.legs; track $index) {
+          @let legIdx = $index;
+          @let effectiveDelay = getLegEffectiveDelay(leg, legIdx);
+          @let isCancelled = isLegCancelled(leg, legIdx);
+          @let badge = getLegModeBadge(leg);
+          @let stopovers = getEnrichedLegStopovers(leg);
+
+          <!-- Individual Leg Card -->
+          <div
+            class="bg-white rounded-3xl p-5 sm:p-6 border border-[#E0E0E0] shadow-xs space-y-4 transition-all hover:border-[#BDBDBD]"
+            [class.ring-2]="currentStep() === legIdx + 1"
+            [class.ring-[#1B4332]]="currentStep() === legIdx + 1"
+          >
+
+            <!-- 1. Leg Departure Row -->
+            <div
+              class="flex items-start justify-between gap-3 cursor-pointer"
+              (click)="goToStep(legIdx + 1)"
+              role="button"
+              tabindex="0"
+              title="Auf der Karte anzeigen"
+            >
+              <!-- Time + Live Icon + Strike-through if delayed -->
+              <div class="w-16 sm:w-20 shrink-0 flex flex-col">
+                <div class="flex items-center gap-1">
+                  <span class="text-xl sm:text-2xl font-black tracking-tight" [class.text-[#B71C1C]]="isCancelled" [class.text-[#1F1612]]="!isCancelled">
+                    {{ formatTime(leg.departure) }}
+                  </span>
+                  @if (!isCancelled) {
+                    <svg class="w-3.5 h-3.5 text-[#1F1612] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M5 12.55a11 11 0 0 1 14.08 0"/>
+                      <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
+                      <circle cx="12" cy="20" r="1" fill="currentColor"/>
+                    </svg>
+                  }
+                </div>
+
+                <!-- Planned time struck-through if delay exists -->
+                @if (effectiveDelay > 0) {
+                  <span class="text-xs font-semibold text-[#757575] line-through">
+                    {{ getPlannedTime(leg.departure, effectiveDelay) }}
+                  </span>
+                }
+              </div>
+
+              <!-- Station Name -->
+              <div class="flex-1 min-w-0">
+                <div class="text-base sm:text-lg font-bold text-[#1F1612] leading-snug">
+                  {{ leg.origin.name }}
+                </div>
+                @if (isCancelled) {
+                  <span class="inline-block mt-0.5 px-2 py-0.5 rounded bg-[#FDE8E8] text-[#B71C1C] text-xs font-black">
+                    Fahrt fällt aus
+                  </span>
+                }
+              </div>
+
+              <!-- Platform (Gleis) -->
+              @if (leg.departurePlatform) {
+                <div class="text-xs sm:text-sm text-[#757575] font-semibold text-right shrink-0">
+                  Gleis {{ leg.departurePlatform }}
+                </div>
+              }
+            </div>
+
+            <!-- 2. Track & Line Section (Between Departure and Arrival) -->
+            <div class="flex items-stretch gap-4">
+
+              <!-- Left Column: Colored vertical bar with Mode Badge centered -->
+              <div class="w-16 sm:w-20 shrink-0 flex flex-col items-center justify-between py-1">
+                <!-- Top bar -->
+                <div class="w-1 flex-1 rounded-t-full" [class]="getLegTrackColor(leg)"></div>
+
+                <!-- Center Mode Badge -->
+                <div class="my-2 select-none">
+                  @if (badge.shape === 'diamond') {
+                    <!-- Rotated 45deg diamond for BUS (Authentic HVV style) -->
+                    <div class="w-7 h-7 bg-[#D62828] transform rotate-45 flex items-center justify-center shadow-xs">
+                      <span class="transform -rotate-45 text-[8.5px] font-black text-white tracking-tighter">BUS</span>
+                    </div>
+                  } @else if (badge.shape === 'square') {
+                    <!-- U-Bahn square -->
+                    <div class="w-7 h-7 rounded-md bg-[#005CA9] flex items-center justify-center text-white text-xs font-black shadow-xs">
+                      U
+                    </div>
+                  } @else if (badge.shape === 'circle-s') {
+                    <!-- S-Bahn circle -->
+                    <div class="w-7 h-7 rounded-full bg-[#007A3D] flex items-center justify-center text-white text-xs font-black shadow-xs">
+                      S
+                    </div>
+                  } @else if (badge.shape === 'circle-ferry') {
+                    <!-- Ferry circle -->
+                    <div class="w-7 h-7 rounded-full bg-[#009EE0] flex items-center justify-center text-white text-xs font-black shadow-xs">
+                      F
+                    </div>
+                  } @else {
+                    <!-- Regional train circle R -->
+                    <div class="w-7 h-7 rounded-full bg-black flex items-center justify-center text-white text-xs font-black shadow-xs">
+                      R
+                    </div>
+                  }
+                </div>
+
+                <!-- Bottom bar -->
+                <div class="w-1 flex-1 rounded-b-full" [class]="getLegTrackColor(leg)"></div>
+              </div>
+
+              <!-- Right Column: Line and Direction Box & Intermediate Stops -->
+              <div class="flex-1 min-w-0 space-y-3">
+
+                <!-- Line & Direction Card Box (HVV Switch Style) -->
+                <div
+                  class="rounded-2xl border border-[#D5D5D5] bg-white p-3.5 sm:p-4 space-y-2.5 cursor-pointer hover:border-black transition-colors"
+                  (click)="goToStep(legIdx + 1)"
+                  role="button"
+                  tabindex="0"
+                  title="Auf der Karte anzeigen"
+                >
+                  <div class="flex items-center gap-2.5 flex-wrap">
+                    <!-- Line Pill Badge (e.g. 6544 red pill, RB71 black pill, S1 green pill) -->
+                    <div
+                      class="px-2.5 py-0.5 text-xs font-black tracking-tight text-white rounded-md uppercase shrink-0"
+                      [class]="getLegPillBg(leg)"
+                    >
+                      {{ leg.line?.name || 'Linie' }}
+                    </div>
+
+                    <!-- Direction -->
+                    <div class="text-sm sm:text-base font-bold text-[#1F1612] leading-snug">
+                      Richtung {{ leg.direction || leg.destination.name }}
+                    </div>
+                  </div>
+
+                  <!-- Amenities / Alerts List -->
+                  <div class="flex flex-col gap-1 text-xs text-[#555] pt-0.5">
+                    <div class="flex items-center gap-1.5">
+                      <span class="mat-icon text-sm text-[#555]">ac_unit</span>
+                      <span>Klimaanlage</span>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                      <span class="mat-icon text-sm text-[#555]">accessible</span>
+                      <span>Fahrzeuggebundene Einstiegshilfe vorhanden</span>
+                    </div>
+                    @if (leg.remarks && leg.remarks.length > 0) {
+                      @for (rem of leg.remarks; track $index) {
+                        <div class="flex items-center gap-1.5 text-[#0284C7] font-semibold">
+                          <span class="mat-icon text-sm text-[#0284C7]">info</span>
+                          <span>{{ rem.text || rem.summary }}</span>
+                        </div>
+                      }
+                    }
+                  </div>
+                </div>
+
+                <!-- Intermediate Stops Accordion Toggle -->
+                <div class="border-t border-[#F0F0F0] pt-2">
+                  <button
+                    type="button"
+                    (click)="toggleIntermediateStops(legIdx)"
+                    class="w-full flex items-center justify-between text-xs sm:text-sm font-semibold text-[#1F1612] hover:text-[#2D6A4F] py-1 cursor-pointer transition-colors"
+                    [attr.aria-expanded]="isStopsOpen(legIdx)"
+                  >
+                    <span>Fahre {{ getStopCountText(leg, stopovers.length) }} ({{ leg.durationMinutes }} min)</span>
+                    <span class="mat-icon text-lg text-[#757575] transition-transform duration-200" [class.rotate-180]="isStopsOpen(legIdx)">
+                      expand_more
+                    </span>
+                  </button>
+
+                  <!-- Expanded Intermediate Stops List -->
+                  @if (isStopsOpen(legIdx)) {
+                    <div class="pl-3 py-2 space-y-2 border-l-2 border-dashed border-[#DDD] ml-2 text-xs text-[#444] animate-in fade-in duration-150">
+                      @for (s of stopovers; track s.stop.id || $index) {
+                        <div class="flex items-center justify-between gap-2">
+                          <span class="font-medium text-[#1F1612]">{{ s.stop.name }}</span>
+                          <div class="flex items-center gap-2 text-[11px] text-[#757575] shrink-0">
+                            <span>{{ formatTime(s.arrival || s.departure || leg.departure) }}</span>
+                            @if (s.platform) {
+                              <span>Gleis {{ s.platform }}</span>
+                            }
+                          </div>
+                        </div>
+                      }
+                    </div>
+                  }
+                </div>
+
+              </div>
+
+            </div>
+
+            <!-- 3. Leg Arrival Row -->
+            <div
+              class="flex items-start justify-between gap-3 pt-1 cursor-pointer"
+              (click)="goToStep(legIdx + 1)"
+              role="button"
+              tabindex="0"
+              title="Auf der Karte anzeigen"
+            >
+              <!-- Time + Live Icon + Strike-through if delayed -->
+              <div class="w-16 sm:w-20 shrink-0 flex flex-col">
+                <div class="flex items-center gap-1">
+                  <span class="text-xl sm:text-2xl font-black tracking-tight" [class.text-[#B71C1C]]="isCancelled" [class.text-[#1F1612]]="!isCancelled">
+                    {{ formatTime(leg.arrival) }}
+                  </span>
+                  @if (!isCancelled) {
+                    <svg class="w-3.5 h-3.5 text-[#1F1612] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M5 12.55a11 11 0 0 1 14.08 0"/>
+                      <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
+                      <circle cx="12" cy="20" r="1" fill="currentColor"/>
+                    </svg>
+                  }
+                </div>
+
+                <!-- Planned time struck-through if delay exists -->
+                @if (effectiveDelay > 0) {
+                  <span class="text-xs font-semibold text-[#757575] line-through">
+                    {{ getPlannedTime(leg.arrival, effectiveDelay) }}
+                  </span>
+                }
+              </div>
+
+              <!-- Station Name -->
+              <div class="flex-1 min-w-0">
+                <div class="text-base sm:text-lg font-bold text-[#1F1612] leading-snug">
+                  {{ leg.destination.name }}
+                </div>
+              </div>
+
+              <!-- Platform (Gleis) -->
+              @if (leg.arrivalPlatform) {
+                <div class="text-xs sm:text-sm text-[#757575] font-semibold text-right shrink-0">
+                  Gleis {{ leg.arrivalPlatform }}
+                </div>
+              }
+            </div>
+
+            <!-- 4. Carousel Indicator Dots at Card Bottom (Authentic HVV Switch design) -->
+            <div class="flex items-center justify-center gap-1.5 pt-2" aria-hidden="true">
+              @for (_ of journey.legs; track $index) {
+                @if ($index === legIdx) {
+                  <span class="w-6 h-1.5 rounded-full bg-[#1F1612] transition-all"></span>
+                } @else {
+                  <span class="w-1.5 h-1.5 rounded-full bg-[#CCCCCC] transition-all"></span>
+                }
+              }
+            </div>
+
+          </div>
+
+          <!-- Transfer segment between cards (if not last leg) -->
+          @if (!$last) {
+            <div class="flex items-center gap-4 py-2">
+              <!-- Left vertical dots connector -->
+              <div class="w-16 sm:w-20 shrink-0 flex flex-col items-center space-y-1.5">
+                <span class="w-1.5 h-1.5 rounded-full bg-[#1F1612]"></span>
+                <span class="w-1.5 h-1.5 rounded-full bg-[#1F1612]"></span>
+                <span class="w-1.5 h-1.5 rounded-full bg-[#1F1612]"></span>
+                <span class="w-1.5 h-1.5 rounded-full bg-[#1F1612]"></span>
+              </div>
+
+              <!-- Right transfer text: Steige um (X min zu Fuß, Y min warten) -->
+              <div class="flex-1 min-w-0 flex items-center gap-2 text-sm sm:text-base font-semibold text-[#1F1612]">
+                <span class="mat-icon text-lg text-[#1F1612]">sync_alt</span>
+                <span>{{ getTransferSummary(journey, legIdx) }}</span>
+              </div>
+            </div>
+          }
+
+        }
+
+        <!-- FINAL ARRIVAL SECTION (ZIEL) -->
+        <div
+          class="flex items-start gap-4 pt-1 p-2 rounded-2xl transition-colors cursor-pointer hover:bg-[#FAF7F2]"
+          (click)="goToStep(totalSteps() - 1)"
+          role="button"
+          tabindex="0"
+          title="Zielort auf der Karte anzeigen"
+        >
+          <!-- Left column: Final arrival time -->
+          <div class="w-16 sm:w-20 shrink-0 flex flex-col items-start">
+            <span class="text-xl sm:text-2xl font-black text-[#1F1612] tracking-tight">
+              {{ formatTime(journey.arrival) }}
+            </span>
+          </div>
+
+          <!-- Right column: Destination address & Ziel label -->
+          <div class="flex-1 min-w-0 pt-0.5 space-y-0.5">
+            <div class="text-base sm:text-lg font-bold text-[#1F1612] leading-snug">
+              {{ journey.destination.name }}
+            </div>
+            <div class="text-xs sm:text-sm text-[#757575] font-normal">
+              Ziel
+            </div>
+          </div>
+        </div>
+
+        <!-- Ticket & Deutschlandticket Note -->
+        <div class="bg-white rounded-2xl p-4 border border-[#E0E0E0] flex items-center justify-between gap-3 text-xs font-semibold text-[#1B4332] shadow-2xs">
+          <div class="flex items-center gap-2">
+            <span class="mat-icon text-base text-[#2D6A4F]">confirmation_number</span>
+            <span>100% Gültig mit dem Deutschlandticket (Nah- & Regionalverkehr)</span>
+          </div>
+          <span class="px-2.5 py-1 rounded-md bg-[#EDF9F0] text-[#1B4332] text-xs font-black shrink-0">
+            0,00 €
+          </span>
+        </div>
+
+      </main>
+
+    </div>
+
+    <!-- ============================================================== -->
+    <!-- 4. TICKET PURCHASE MODAL (When clicking "Ticket kaufen")        -->
+    <!-- ============================================================== -->
+    @if (showTicketModal()) {
+      <div
+        class="fixed inset-0 z-[600] bg-black/50 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-150"
+      >
+        <!-- Backdrop dismiss click area -->
+        <button
+          type="button"
+          class="absolute inset-0 w-full h-full cursor-default bg-transparent border-0"
+          (click)="closeTicketModal()"
+          aria-label="Modal schließen"
+        ></button>
+
+        <div
+          class="relative bg-white w-full max-w-lg rounded-t-[28px] sm:rounded-3xl p-5 sm:p-6 space-y-4 shadow-2xl animate-in slide-in-from-bottom-4 duration-200"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Fahrkarte wählen"
+        >
+          <!-- Modal Header -->
+          <div class="flex items-center justify-between pb-2 border-b border-[#F0F0F0]">
+            <div>
+              <h3 class="text-lg font-black text-[#1F1612]">Fahrkarte wählen</h3>
+              <p class="text-xs text-[#757575] mt-0.5">
+                {{ journey.origin.name }} → {{ journey.destination.name }}
+              </p>
+            </div>
+            <button
+              type="button"
+              (click)="closeTicketModal()"
+              class="w-8 h-8 rounded-full bg-[#FAF7F2] hover:bg-[#EDE5DC] flex items-center justify-center text-[#1F1612] cursor-pointer"
+              aria-label="Schließen"
+            >
+              <span class="mat-icon text-base">close</span>
+            </button>
+          </div>
+
+          @if (ticketBookingSuccess()) {
+            <div class="p-3 bg-[#EDF9F0] border border-[#B7E4C7] rounded-xl flex items-center gap-2 text-xs font-bold text-[#1B4332]">
+              <span class="mat-icon text-base text-[#2D6A4F]">check_circle</span>
+              <span>{{ ticketBookingSuccess() }}</span>
+            </div>
+          }
+
+          <!-- Ticket Options List -->
+          <div class="space-y-2.5">
+            <!-- Deutschlandticket Option -->
+            <button
+              type="button"
+              (click)="buyTicket('Deutschlandticket (0,00 € mit Abo)')"
+              class="w-full text-left p-3.5 rounded-2xl border-2 border-[#1B4332] bg-[#EDF9F0]/50 hover:bg-[#EDF9F0] transition-colors cursor-pointer flex items-center justify-between gap-3"
+            >
+              <div class="space-y-0.5">
+                <div class="flex items-center gap-1.5 font-black text-sm text-[#1B4332]">
+                  <span class="mat-icon text-base">verified</span>
+                  <span>Deutschlandticket (D-Ticket)</span>
+                </div>
+                <div class="text-xs text-[#2D6A4F]">
+                  Bundesweit im Nah- und Regionalverkehr gültig
+                </div>
+              </div>
+              <div class="text-right shrink-0">
+                <div class="text-base font-black text-[#1B4332]">0,00 €</div>
+                <div class="text-[10px] text-[#2D6A4F] font-bold">Im Abo enthalten</div>
+              </div>
+            </button>
+
+            <!-- HVV Einzelkarte Option -->
+            <button
+              type="button"
+              (click)="buyTicket('HVV Einzelkarte Hamburg AB (3,80 €)')"
+              class="w-full text-left p-3.5 rounded-2xl border border-[#E0E0E0] hover:border-[#1F1612] bg-white hover:bg-[#FAF7F2] transition-colors cursor-pointer flex items-center justify-between gap-3"
+            >
+              <div class="space-y-0.5">
+                <div class="font-bold text-sm text-[#1F1612]">HVV Einzelkarte</div>
+                <div class="text-xs text-[#757575]">Hamburg AB (1 Fahrt in Richtung Ziel)</div>
+              </div>
+              <div class="text-right shrink-0">
+                <div class="text-base font-black text-[#1F1612]">3,80 €</div>
+                <div class="text-[10px] text-[#757575]">Einzelticket</div>
+              </div>
+            </button>
+
+            <!-- HVV Tageskarte Option -->
+            <button
+              type="button"
+              (click)="buyTicket('HVV 9-Uhr-Tageskarte (7,50 €)')"
+              class="w-full text-left p-3.5 rounded-2xl border border-[#E0E0E0] hover:border-[#1F1612] bg-white hover:bg-[#FAF7F2] transition-colors cursor-pointer flex items-center justify-between gap-3"
+            >
+              <div class="space-y-0.5">
+                <div class="font-bold text-sm text-[#1F1612]">9-Uhr-Tageskarte</div>
+                <div class="text-xs text-[#757575]">Beliebig viele Fahrten ab 9 Uhr</div>
+              </div>
+              <div class="text-right shrink-0">
+                <div class="text-base font-black text-[#1F1612]">7,50 €</div>
+                <div class="text-[10px] text-[#757575]">Tageskarte</div>
+              </div>
+            </button>
+          </div>
+
+          <!-- Bottom Close Button -->
+          <div class="pt-2">
+            <button
+              type="button"
+              (click)="closeTicketModal()"
+              class="w-full py-2.5 rounded-full bg-[#FAF7F2] hover:bg-[#EDE5DC] text-[#1F1612] font-bold text-xs cursor-pointer transition-colors"
+            >
+              Schließen
+            </button>
+          </div>
+        </div>
+      </div>
+    }
+
+  </div>
+}

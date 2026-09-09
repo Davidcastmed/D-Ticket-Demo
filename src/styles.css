@@ -108,6 +108,15 @@
   border-radius: 7px !important;
 }
 
+/* Footer pinned flush to the bottom with explicit 1rem top border radius */
+#app-desktop-footer {
+  border-top-left-radius: 1rem !important;
+  border-top-right-radius: 1rem !important;
+  border-bottom-left-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+  overflow: hidden;
+}
+
 /* Custom Leaflet Map styling */
 .leaflet-popup-content-wrapper {
   border-radius: 7px !important;

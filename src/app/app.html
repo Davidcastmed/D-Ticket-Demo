@@ -251,7 +251,7 @@
   </header>
 
   <!-- Main Content Layout with tighter top margin -->
-  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-3.5 sm:py-4" [class.pb-20]="!hasSearchResults()" [class.pb-4]="hasSearchResults()">
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-3.5 sm:py-4" [class.pb-6]="!hasSearchResults()" [class.pb-4]="hasSearchResults()">
     <div class="grid grid-cols-1 gap-6" [class.lg:grid-cols-12]="showMap()">
       
       <!-- Primary View Container -->
@@ -333,47 +333,180 @@
 
   <!-- Footer Information (Disappears when search results are showing) -->
   @if (!hasSearchResults()) {
-    <footer id="app-desktop-footer" class="mt-auto bg-white border-t border-[#E6DED6] py-6 mb-16 sm:mb-18 text-[#795548] text-xs">
-      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3">
-        <div class="flex items-center gap-2">
-          <span class="font-bold text-[#3E2723]">hvv switch • Deutschland Regional</span>
-          <span>—</span>
-          <span>Ausschließlich Nahverkehr & Deutschlandticket (RE, RB, S-Bahn)</span>
+    <footer
+      id="app-desktop-footer"
+      class="mt-auto w-full bg-white border-t-2 border-[#1B4332] border-x border-[#E6DED6] border-b-0 text-[#3E2723] shadow-[0_-8px_28px_rgba(46,31,24,0.06)] pt-7 pb-28 sm:pb-24 px-4 sm:px-6 lg:px-8 mb-0 rounded-t-[1rem]"
+    >
+      <div class="max-w-7xl mx-auto flex flex-col gap-6">
+        
+        <!-- Top Section: Brand Identity, Real-Time Address, and Badges -->
+        <div class="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+          <!-- Brand & Subtitle -->
+          <div class="flex items-center gap-3">
+            <span class="w-10 h-10 rounded-xl bg-[#1B4332] text-white flex items-center justify-center shadow-2xs shrink-0">
+              <span class="mat-icon text-xl text-[#74C69D]">train</span>
+            </span>
+            <div>
+              <div class="font-black text-[#1F1612] text-base sm:text-lg tracking-tight flex items-center gap-2">
+                <span>hvv switch • Deutschland Regional</span>
+              </div>
+              <p class="text-xs text-[#795548] font-medium mt-0.5">
+                Ausschließlich Nahverkehr & 49€ Deutschlandticket (RE, RB, S-Bahn, U-Bahn, Bus)
+              </p>
+            </div>
+          </div>
+
+          <!-- Live GPS & Current Address Pill + Regional Badges -->
+          <div class="flex flex-wrap items-center gap-2.5">
+            <!-- Current Location Indicator -->
+            <div
+              id="footer-location-indicator"
+              class="flex items-center gap-2 bg-[#FAF7F2] border border-[#E6DED6] px-3.5 py-1.5 rounded-full text-xs text-[#3E2723] shadow-2xs"
+              title="Aktuell ermittelte Adresse oder Ausgangsstation"
+            >
+              <span class="w-2 h-2 rounded-full bg-[#2D6A4F] animate-pulse shrink-0"></span>
+              <span class="font-medium text-[#795548]">Standort:</span>
+              <span class="font-bold text-[#1F1612] max-w-[200px] sm:max-w-xs truncate">{{ currentLocationDisplay() }}</span>
+            </div>
+
+            <!-- Regional Transit Badges -->
+            <div class="flex items-center gap-1.5">
+              <span class="px-2.5 py-1 rounded-md bg-[#EDF9F0] text-[#1B4332] border border-[#2D6A4F]/25 text-[11px] font-black tracking-wide">
+                49€ D-Ticket
+              </span>
+              <span class="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-[#FAF7F2] text-[#4E342E] border border-[#E6DED6] text-[11px] font-semibold">
+                <span class="mat-icon text-xs text-[#2D6A4F]">bolt</span> DB HAFAS Live
+              </span>
+              <span class="hidden md:inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-[#FAF7F2] text-[#4E342E] border border-[#E6DED6] text-[11px] font-semibold">
+                <span class="mat-icon text-xs text-[#2D6A4F]">accessible</span> Barrierefrei
+              </span>
+            </div>
+          </div>
         </div>
-        <div class="text-[#8D6E63]">
-          Echtzeitdaten via Deutsche Bahn HAFAS & OpenStreetMap
+
+        <!-- 3 Feature & Information Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3.5 text-xs">
+          <!-- Card 1: Geltungsbereich -->
+          <div class="bg-[#FAF7F2]/80 border border-[#E6DED6] rounded-xl p-3.5 flex flex-col gap-2">
+            <div class="flex items-center gap-2 font-bold text-[#1F1612]">
+              <span class="w-6 h-6 rounded-md bg-[#EDF9F0] text-[#1B4332] flex items-center justify-center">
+                <span class="mat-icon text-sm">directions_railway</span>
+              </span>
+              <span>Geltungsbereich & Züge</span>
+            </div>
+            <ul class="text-[#5D4037] space-y-1 text-[11px] leading-relaxed">
+              <li class="flex items-center gap-1.5">
+                <span class="text-[#2D6A4F] font-bold">✓</span>
+                <span>Regional-Express (RE, MEX, IRE) & RB</span>
+              </li>
+              <li class="flex items-center gap-1.5">
+                <span class="text-[#2D6A4F] font-bold">✓</span>
+                <span>S-Bahn, U-Bahn, Straßenbahn & Busse</span>
+              </li>
+              <li class="flex items-center gap-1.5 text-[#B71C1C]">
+                <span class="font-bold">✕</span>
+                <span>Kein Fernverkehr (ICE, IC, EC, Flixtrain)</span>
+              </li>
+            </ul>
+          </div>
+
+          <!-- Card 2: Komfort & Barrierefreiheit -->
+          <div class="bg-[#FAF7F2]/80 border border-[#E6DED6] rounded-xl p-3.5 flex flex-col gap-2">
+            <div class="flex items-center gap-2 font-bold text-[#1F1612]">
+              <span class="w-6 h-6 rounded-md bg-[#EDF9F0] text-[#1B4332] flex items-center justify-center">
+                <span class="mat-icon text-sm">accessible_forward</span>
+              </span>
+              <span>Barrierefreiheit & Service</span>
+            </div>
+            <ul class="text-[#5D4037] space-y-1 text-[11px] leading-relaxed">
+              <li class="flex items-center gap-1.5">
+                <span class="text-[#2D6A4F] font-bold">✓</span>
+                <span>Stufenfreie Zugänge & Aufzugsstatus live</span>
+              </li>
+              <li class="flex items-center gap-1.5">
+                <span class="text-[#2D6A4F] font-bold">✓</span>
+                <span>Mehrzweckabteile für Rollstühle & Räder</span>
+              </li>
+              <li class="flex items-center gap-1.5">
+                <span class="text-[#795548] font-bold">ℹ</span>
+                <span>Fahrradmitnahme je nach Verbundregeln</span>
+              </li>
+            </ul>
+          </div>
+
+          <!-- Card 3: Echtzeitdaten & Datenschutz -->
+          <div class="bg-[#FAF7F2]/80 border border-[#E6DED6] rounded-xl p-3.5 flex flex-col gap-2">
+            <div class="flex items-center gap-2 font-bold text-[#1F1612]">
+              <span class="w-6 h-6 rounded-md bg-[#EDF9F0] text-[#1B4332] flex items-center justify-center">
+                <span class="mat-icon text-sm">verified_user</span>
+              </span>
+              <span>Offene Daten & Datenschutz</span>
+            </div>
+            <ul class="text-[#5D4037] space-y-1 text-[11px] leading-relaxed">
+              <li class="flex items-center gap-1.5">
+                <span class="text-[#2D6A4F] font-bold">✓</span>
+                <span>DB HAFAS Echtzeit-Verspätungen & Gleise</span>
+              </li>
+              <li class="flex items-center gap-1.5">
+                <span class="text-[#2D6A4F] font-bold">✓</span>
+                <span>OSM / QGIS Adressauflösung ohne Tracking</span>
+              </li>
+              <li class="flex items-center gap-1.5">
+                <span class="text-[#2D6A4F] font-bold">✓</span>
+                <span>100% DSGVO-konform, keine Werbe-Cookies</span>
+              </li>
+            </ul>
+          </div>
         </div>
+
+        <!-- Subtle Divider -->
+        <div class="w-full h-px bg-[#E6DED6]"></div>
+
+        <!-- Bottom Section: Disclaimer & Copyright -->
+        <div class="flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-[#795548]">
+          <div class="flex items-center gap-2 text-center sm:text-left">
+            <span class="mat-icon text-sm text-[#2D6A4F]">train</span>
+            <span>hvv switch & Deutschlandticket Regional Explorer • Deutschlandweiter Nahverkehr</span>
+          </div>
+          <div class="font-medium text-[#8D6E63] text-center sm:text-right">
+            © 2026 • Echtzeit-Fahrplandaten via DB HAFAS • Alle Angaben ohne Gewähr
+          </div>
+        </div>
+
       </div>
     </footer>
 
-    <!-- Fixed Bottom Quick Access Footer: Inicio, Favoritos, Überrascht mich (Disappears when search results are showing) -->
-    <nav
-      id="bottom-quick-access-footer"
-      role="navigation"
-      aria-label="Schnellnavigation"
-      class="fixed bottom-0 inset-x-0 z-30 bg-white/95 backdrop-blur-md border-t border-[#E6DED6] shadow-[0_-4px_20px_rgba(0,0,0,0.06)] px-3 py-1.5 sm:py-2 animate-in fade-in slide-in-from-bottom-2 duration-200"
+    <!-- Floating Rounded Bottom Navigation Dock with Glassmorphic Backdrop Blur -->
+    <div
+      id="bottom-quick-access-footer-wrapper"
+      class="fixed bottom-3 sm:bottom-4 inset-x-0 z-30 flex justify-center px-3.5 pointer-events-none animate-in fade-in slide-in-from-bottom-3 duration-300"
     >
-      <div class="max-w-md mx-auto flex items-center justify-around gap-2">
+      <nav
+        id="bottom-quick-access-footer"
+        role="navigation"
+        aria-label="Schnellnavigation"
+        class="pointer-events-auto w-full max-w-xs sm:max-w-md bg-[#FAF7F2]/80 sm:bg-white/80 backdrop-blur-xl border border-white/90 sm:border-[#E6DED6]/90 shadow-[0_12px_36px_rgba(27,67,50,0.12),0_4px_16px_rgba(0,0,0,0.06)] rounded-2xl sm:rounded-full p-1.5 flex items-center justify-between gap-1.5 ring-1 ring-[#2D6A4F]/10"
+      >
         
         <!-- 1. Inicio -->
         <button
           type="button"
           id="footer-nav-inicio"
           (click)="navigateToHome()"
-          class="flex-1 flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all cursor-pointer group"
-          [class.text-[#1B4332]]="currentTab() === 'planner'"
-          [class.bg-[#EDF9F0]]="currentTab() === 'planner'"
-          [class.shadow-2xs]="currentTab() === 'planner'"
-          [class.text-[#795548]]="currentTab() !== 'planner'"
-          [class.hover:bg-[#FAF7F2]]="currentTab() !== 'planner'"
+          class="flex-1 flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-2 py-1.5 sm:py-2 px-2.5 sm:px-4 rounded-xl sm:rounded-full transition-all duration-200 cursor-pointer group active:scale-95"
+          [class.bg-[#1B4332]]="currentTab() === 'planner'"
+          [class.text-white]="currentTab() === 'planner'"
+          [class.shadow-xs]="currentTab() === 'planner'"
+          [class.text-[#5D4037]]="currentTab() !== 'planner'"
+          [class.hover:bg-black/5]="currentTab() !== 'planner'"
           [class.hover:text-[#1F1612]]="currentTab() !== 'planner'"
           aria-label="Startseite und Reiseplaner"
           [attr.aria-current]="currentTab() === 'planner' ? 'page' : null"
         >
-          <span class="mat-icon text-xl transition-transform duration-200 group-hover:scale-110" [class.text-[#2D6A4F]]="currentTab() === 'planner'" aria-hidden="true">
+          <span class="mat-icon text-lg sm:text-xl transition-transform duration-200 group-hover:scale-110" [class.text-[#74C69D]]="currentTab() === 'planner'" aria-hidden="true">
             home
           </span>
-          <span class="text-[11px] sm:text-xs mt-0.5 tracking-tight font-bold whitespace-nowrap">Inicio</span>
+          <span class="text-[11px] sm:text-xs tracking-tight font-bold whitespace-nowrap">Inicio</span>
         </button>
 
         <!-- 2. Favoritos -->
@@ -381,20 +514,20 @@
           type="button"
           id="footer-nav-favoritos"
           (click)="setTab('favorites')"
-          class="flex-1 flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all cursor-pointer group"
-          [class.text-[#1B4332]]="currentTab() === 'favorites'"
-          [class.bg-[#EDF9F0]]="currentTab() === 'favorites'"
-          [class.shadow-2xs]="currentTab() === 'favorites'"
-          [class.text-[#795548]]="currentTab() !== 'favorites'"
-          [class.hover:bg-[#FAF7F2]]="currentTab() !== 'favorites'"
+          class="flex-1 flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-2 py-1.5 sm:py-2 px-2.5 sm:px-4 rounded-xl sm:rounded-full transition-all duration-200 cursor-pointer group active:scale-95"
+          [class.bg-[#1B4332]]="currentTab() === 'favorites'"
+          [class.text-white]="currentTab() === 'favorites'"
+          [class.shadow-xs]="currentTab() === 'favorites'"
+          [class.text-[#5D4037]]="currentTab() !== 'favorites'"
+          [class.hover:bg-black/5]="currentTab() !== 'favorites'"
           [class.hover:text-[#1F1612]]="currentTab() !== 'favorites'"
           aria-label="Gespeicherte Favoriten"
           [attr.aria-current]="currentTab() === 'favorites' ? 'page' : null"
         >
-          <span class="mat-icon text-xl transition-transform duration-200 group-hover:scale-110" [class.text-[#2D6A4F]]="currentTab() === 'favorites'" aria-hidden="true">
+          <span class="mat-icon text-lg sm:text-xl transition-transform duration-200 group-hover:scale-110" [class.text-[#74C69D]]="currentTab() === 'favorites'" aria-hidden="true">
             star
           </span>
-          <span class="text-[11px] sm:text-xs mt-0.5 tracking-tight font-bold whitespace-nowrap">Favoritos</span>
+          <span class="text-[11px] sm:text-xs tracking-tight font-bold whitespace-nowrap">Favoritos</span>
         </button>
 
         <!-- 3. Überrascht mich -->
@@ -402,24 +535,24 @@
           type="button"
           id="footer-nav-surprise"
           (click)="setTab('surprise')"
-          class="flex-1 flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all cursor-pointer group"
-          [class.text-[#1B4332]]="currentTab() === 'surprise'"
-          [class.bg-[#EDF9F0]]="currentTab() === 'surprise'"
-          [class.shadow-2xs]="currentTab() === 'surprise'"
-          [class.text-[#795548]]="currentTab() !== 'surprise'"
-          [class.hover:bg-[#FAF7F2]]="currentTab() !== 'surprise'"
+          class="flex-1 flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-2 py-1.5 sm:py-2 px-2.5 sm:px-4 rounded-xl sm:rounded-full transition-all duration-200 cursor-pointer group active:scale-95"
+          [class.bg-[#1B4332]]="currentTab() === 'surprise'"
+          [class.text-white]="currentTab() === 'surprise'"
+          [class.shadow-xs]="currentTab() === 'surprise'"
+          [class.text-[#5D4037]]="currentTab() !== 'surprise'"
+          [class.hover:bg-black/5]="currentTab() !== 'surprise'"
           [class.hover:text-[#1F1612]]="currentTab() !== 'surprise'"
           aria-label="Überrascht mich - Zufallsausflug"
           [attr.aria-current]="currentTab() === 'surprise' ? 'page' : null"
         >
-          <span class="mat-icon text-xl transition-transform duration-200 group-hover:scale-110" [class.text-[#2D6A4F]]="currentTab() === 'surprise'" aria-hidden="true">
+          <span class="mat-icon text-lg sm:text-xl transition-transform duration-200 group-hover:scale-110" [class.text-[#74C69D]]="currentTab() === 'surprise'" aria-hidden="true">
             auto_awesome
           </span>
-          <span class="text-[11px] sm:text-xs mt-0.5 tracking-tight font-bold whitespace-nowrap">Überrascht mich</span>
+          <span class="text-[11px] sm:text-xs tracking-tight font-bold whitespace-nowrap">Überrascht mich</span>
         </button>
 
-      </div>
-    </nav>
+      </nav>
+    </div>
   }
 
   <!-- PWA Install Modal & Offline Indicator -->

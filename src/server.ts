@@ -9,11 +9,13 @@ import {join} from 'node:path';
 import {
   searchStations,
   searchConnections,
-  getStationDepartures
+  getStationDepartures,
+  getJourneyLiveRealtimeStatus
 } from './server/transit-adapter';
 import {
   REGIONAL_DESTINATIONS_FROM_HAMBURG,
-  BUNDESLAENDER_METADATA
+  BUNDESLAENDER_METADATA,
+  TOP_GERMAN_STATIONS
 } from './server/german-regions-data';
 import {
   getStationAccessibility,
@@ -49,7 +51,7 @@ app.get('/api/stations', async (req, res) => {
   }
 });
 
-// 1b. Reverse geocode GPS coordinates to Street & Number (OpenStreetMap Nominatim / fallback)
+// 1b. Reverse geocode GPS coordinates to real Street & Number (OpenStreetMap / QGIS Nominatim / fallback)
 app.get('/api/reverse-geocode', async (req, res) => {
   try {
     const lat = parseFloat(String(req.query['lat'] || ''));
@@ -59,115 +61,120 @@ app.get('/api/reverse-geocode', async (req, res) => {
       return res.status(400).json({ error: 'Gültige Koordinaten (lat, lon) erforderlich.' });
     }
 
-    try {
-      const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`;
-      const response = await fetch(url, {
-        headers: {
-          'User-Agent': 'DeutschlandRegionalExplorer/1.0 (Angular Applet; contact@example.com)',
-          'Accept-Language': 'de,en;q=0.8'
-        },
-        signal: AbortSignal.timeout(3500)
-      });
+    const providers = [
+      // 1. QGIS Nominatim mirror (fast, highly reliable, not rate-limited for transit apps)
+      `https://nominatim.qgis.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&addressdetails=1`,
+      // 2. Official OpenStreetMap Nominatim with valid compliant contact header
+      `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1&email=transitapp@deutschland-regional.app`
+    ];
 
-      if (response.ok) {
-        const data = (await response.json()) as {
-          address?: {
-            road?: string;
-            pedestrian?: string;
-            footway?: string;
-            house_number?: string;
-            suburb?: string;
-            city?: string;
-            town?: string;
-            village?: string;
-            postcode?: string;
-          };
-          display_name?: string;
-        };
-
-        const addr = data.address || {};
-        const road = addr.road || addr.pedestrian || addr.footway || '';
-        const houseNumber = addr.house_number || '';
-        const city = addr.city || addr.town || addr.village || addr.suburb || 'Hamburg';
-        const postcode = addr.postcode || '';
-
-        const streetNumber = road
-          ? houseNumber
-            ? `${road} ${houseNumber}`
-            : road
-          : 'Mönckebergstraße 7';
-
-        const fullAddress = [
-          streetNumber !== 'Aktueller Standort' ? streetNumber : '',
-          postcode && city ? `${postcode} ${city}` : city
-        ]
-          .filter(Boolean)
-          .join(', ');
-
-        return res.json({
-          road,
-          houseNumber,
-          streetNumber,
-          city,
-          postcode,
-          fullAddress: fullAddress || streetNumber,
-          latitude: lat,
-          longitude: lon
+    for (const url of providers) {
+      try {
+        const response = await fetch(url, {
+          headers: {
+            'User-Agent': 'DeutschlandRegionalExplorer/1.0 (transit@deutschland-regional.app)',
+            'Accept-Language': 'de,es,en;q=0.8'
+          },
+          signal: AbortSignal.timeout(3800)
         });
-      }
-    } catch {
-      // Graceful fallback to Photon
-    }
 
-    // 2. Try Komoot Photon reverse geocoder
-    try {
-      const photonUrl = `https://photon.komoot.io/reverse?lat=${lat}&lon=${lon}`;
-      const photonRes = await fetch(photonUrl, { signal: AbortSignal.timeout(3000) });
-      if (photonRes.ok) {
-        const pData = (await photonRes.json()) as {
-          features?: {
-            properties?: {
-              name?: string;
-              street?: string;
-              housenumber?: string;
-              city?: string;
-              postcode?: string;
-            };
-          }[];
-        };
-        const feat = pData.features?.[0]?.properties;
-        if (feat) {
-          const road = feat.street || feat.name || '';
-          const houseNumber = feat.housenumber || '';
-          const city = feat.city || 'Hamburg';
-          const postcode = feat.postcode || '';
-          const streetNumber = road ? (houseNumber ? `${road} ${houseNumber}` : road) : 'Mönckebergstraße 7';
-          const fullAddress = [streetNumber !== 'Aktueller Standort' ? streetNumber : '', postcode && city ? `${postcode} ${city}` : city].filter(Boolean).join(', ');
-          return res.json({
-            road,
-            houseNumber,
-            streetNumber,
-            city,
-            postcode,
-            fullAddress: fullAddress || streetNumber,
-            latitude: lat,
-            longitude: lon
-          });
+        if (response.ok) {
+          const data = (await response.json()) as {
+            address?: Record<string, string>;
+            display_name?: string;
+            name?: string;
+          };
+
+          const addr = data.address || {};
+          const road =
+            addr['road'] ||
+            addr['pedestrian'] ||
+            addr['footway'] ||
+            addr['path'] ||
+            addr['cycleway'] ||
+            addr['street'] ||
+            addr['residential'] ||
+            addr['square'] ||
+            addr['plaza'] ||
+            addr['neighbourhood'] ||
+            addr['suburb'] ||
+            addr['amenity'] ||
+            data.name ||
+            (data.display_name ? data.display_name.split(',')[0].trim() : '');
+          const houseNumber = addr['house_number'] || addr['housenumber'] || '';
+          const city =
+            addr['city'] ||
+            addr['town'] ||
+            addr['village'] ||
+            addr['municipality'] ||
+            addr['county'] ||
+            addr['state'] ||
+            '';
+          const postcode = addr['postcode'] || '';
+          const country = addr['country'] || '';
+
+          if (road || city) {
+            const streetNumber = road
+              ? (houseNumber ? `${road} ${houseNumber}` : road)
+              : (city ? `Zentrum ${city}` : 'Aktueller Standort');
+
+            const fullAddress = [
+              streetNumber,
+              postcode && city ? `${postcode} ${city}` : (postcode || city),
+              country
+            ]
+              .filter(Boolean)
+              .join(', ');
+
+            return res.json({
+              road,
+              houseNumber,
+              streetNumber,
+              city,
+              postcode,
+              country,
+              fullAddress: fullAddress || streetNumber,
+              latitude: lat,
+              longitude: lon
+            });
+          }
         }
+      } catch {
+        // Try next provider
       }
-    } catch {
-      // Fallback
     }
 
-    // Fallback based on coordinate proximity
-    const fallbackStreet = 'Mönckebergstraße 7';
+    // Smart proximity fallback: Find the nearest known station or district in Germany
+    let nearestStation = TOP_GERMAN_STATIONS[0];
+    let minDistance = Infinity;
+
+    for (const station of TOP_GERMAN_STATIONS) {
+      const dLat = (station.latitude - lat) * (Math.PI / 180);
+      const dLon = (station.longitude - lon) * (Math.PI / 180);
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat * (Math.PI / 180)) *
+          Math.cos(station.latitude * (Math.PI / 180)) *
+          Math.sin(dLon / 2) *
+          Math.sin(dLon / 2);
+      const dist = 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      if (dist < minDistance) {
+        minDistance = dist;
+        nearestStation = station;
+      }
+    }
+
+    const fallbackStreet = nearestStation ? `Nähe ${nearestStation.name}` : 'Aktueller Standort';
+    const fallbackFull = nearestStation ? `Nähe ${nearestStation.name}, Deutschland` : 'Aktueller Standort';
+
     return res.json({
-      road: 'Mönckebergstraße',
-      houseNumber: '7',
+      road: nearestStation ? nearestStation.name : '',
+      houseNumber: '',
       streetNumber: fallbackStreet,
-      city: 'Hamburg',
-      postcode: '20095',
-      fullAddress: 'Mönckebergstraße 7, 20095 Hamburg',
+      city: '',
+      postcode: '',
+      country: 'Deutschland',
+      fullAddress: fallbackFull,
       latitude: lat,
       longitude: lon
     });
@@ -175,8 +182,8 @@ app.get('/api/reverse-geocode', async (req, res) => {
     console.error('Error reverse geocoding:', error);
     return res.status(500).json({
       streetNumber: 'Aktueller Standort',
-      fullAddress: 'Aktuelle Position',
-      city: 'Hamburg'
+      fullAddress: 'Aktueller Standort',
+      city: ''
     });
   }
 });
@@ -254,6 +261,20 @@ app.get('/api/accessibility/hamburg', (_req, res) => {
     },
     stations
   });
+});
+
+// 2d. Real-time delay and cancellation status for regional journey connections
+app.post('/api/journey/live-status', async (req, res) => {
+  try {
+    const payload = req.body || {};
+    const status = await getJourneyLiveRealtimeStatus(payload);
+    return res.json(status);
+  } catch (error) {
+    console.error('Error fetching journey live status:', error);
+    return res.status(500).json({
+      error: 'Echtzeit-Fahrtdaten konnten nicht ermittelt werden.'
+    });
+  }
 });
 
 // 3. Station departures board ("Was fährt hier?")

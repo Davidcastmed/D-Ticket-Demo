@@ -4,14 +4,18 @@ import {
   Output,
   signal,
   computed,
+  effect,
   ChangeDetectionStrategy,
   inject,
-  OnInit
+  OnInit,
+  AfterViewInit,
+  ViewChild
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
 import { Station, ConnectionJourney, TransitLeg, Stopover, RouteAccessibilitySummary } from '../../models/transit.models';
 import { TransitService } from '../../services/transit.service';
+import { WeatherService } from '../../services/weather.service';
 import { ALL_GERMAN_STATIONS } from '../../data/stations-data';
 import { StationInput } from '../../components/station-input/station-input';
 import { MapView } from '../../components/map/map-view';
@@ -132,21 +136,47 @@ interface CuratedDestination {
               </div>
 
               <!-- 1rem Contenedor: Dein Standort (Aktueller Standort mit vollständiger Adresse) + Karten-Icon mit Rückkehroption -->
-              <div class="mt-3.5 p-3 bg-white rounded-xl border border-[#E6DED6] hover:border-[#2D6A4F] flex items-center justify-between gap-3 transition-all shadow-2xs">
-                  
+              <div
+                class="mt-3.5 p-3 rounded-xl border transition-all duration-200 shadow-2xs"
+                [class.bg-white]="standortActionState() === 'idle'"
+                [class.border-[#E6DED6]]="standortActionState() === 'idle'"
+                [class.hover:border-[#2D6A4F]]="standortActionState() === 'idle'"
+                [class.bg-[#EDF9F0]]="standortActionState() === 'success'"
+                [class.border-[#2D6A4F]]="standortActionState() === 'success' || standortActionState() === 'locating'"
+                [class.ring-2]="standortActionState() === 'success' || standortActionState() === 'locating'"
+                [class.ring-[#2D6A4F]/25]="standortActionState() === 'success' || standortActionState() === 'locating'"
+                [class.bg-[#FFFBEB]]="standortActionState() === 'gps-warning'"
+                [class.border-[#D97706]]="standortActionState() === 'gps-warning'"
+              >
+                <div class="flex items-center justify-between gap-3">
                   <!-- Klickbereich: Überträgt den aktuellen Standort in 'Von' (Startbahnhof) -->
                   <button
                     type="button"
                     id="btn-standort-to-origin"
                     (click)="applyStandortToOrigin()"
-                    class="flex items-center gap-3 min-w-0 flex-1 text-left cursor-pointer group py-0.5"
+                    class="flex items-center gap-3 min-w-0 flex-1 text-left cursor-pointer group py-0.5 active:scale-[0.98] transition-transform"
                     title="Aktuellen Standort als Startbahnhof (Von) übernehmen"
                     aria-label="Deinen aktuellen Standort als Startbahnhof übernehmen"
                   >
                     <!-- Icono a la izquierda en una sola columna -->
-                    <div class="w-9 h-9 rounded-lg bg-[#EDF9F0] group-hover:bg-[#2D6A4F] text-[#2D6A4F] group-hover:text-white flex items-center justify-center shrink-0 transition-colors shadow-2xs" aria-hidden="true">
-                      @if (transitService.isLocating()) {
+                    <div
+                      class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-colors shadow-2xs"
+                      [class.bg-[#EDF9F0]]="standortActionState() === 'idle' || standortActionState() === 'locating'"
+                      [class.text-[#2D6A4F]]="standortActionState() === 'idle' || standortActionState() === 'locating'"
+                      [class.group-hover:bg-[#2D6A4F]]="standortActionState() === 'idle'"
+                      [class.group-hover:text-white]="standortActionState() === 'idle'"
+                      [class.bg-[#1B4332]]="standortActionState() === 'success'"
+                      [class.text-white]="standortActionState() === 'success'"
+                      [class.bg-[#FDE68A]]="standortActionState() === 'gps-warning'"
+                      [class.text-[#92400E]]="standortActionState() === 'gps-warning'"
+                      aria-hidden="true"
+                    >
+                      @if (standortActionState() === 'locating' || transitService.isLocating()) {
                         <span class="mat-icon text-base animate-spin">sync</span>
+                      } @else if (standortActionState() === 'success') {
+                        <span class="mat-icon text-lg">check_circle</span>
+                      } @else if (standortActionState() === 'gps-warning') {
+                        <span class="mat-icon text-lg">location_disabled</span>
                       } @else {
                         <span class="mat-icon text-lg">my_location</span>
                       }
@@ -154,14 +184,23 @@ interface CuratedDestination {
 
                     <!-- Dos filas: 1. Fija 'Dein Standort', 2. Dirección completa -->
                     <div class="min-w-0 truncate">
-                      <div class="text-[13px] font-bold text-[#1F1612] group-hover:text-[#1B4332] transition-colors">
+                      <div class="text-[13px] font-bold text-[#1F1612] group-hover:text-[#1B4332] transition-colors flex items-center gap-1.5">
                         <span>Dein Standort</span>
+                        @if (standortActionState() === 'success') {
+                          <span class="inline-flex items-center px-1.5 py-0.2 text-[10px] font-extrabold bg-[#2D6A4F] text-white rounded-md">Übernommen ✓</span>
+                        } @else if (standortActionState() === 'gps-warning') {
+                          <span class="inline-flex items-center px-1.5 py-0.2 text-[10px] font-extrabold bg-[#D97706] text-white rounded-md">GPS prüfen</span>
+                        }
                       </div>
-                      <div class="text-[11px] font-light text-[#795548] truncate mt-0.5" [title]="currentFullAddress()">
-                        @if (transitService.isLocating()) {
-                          <span class="text-[#2D6A4F] animate-pulse">Standort wird ermittelt...</span>
+                      <div class="text-[11px] truncate mt-0.5" [title]="currentFullAddress()">
+                        @if (standortActionState() === 'locating' || transitService.isLocating()) {
+                          <span class="text-[#2D6A4F] font-semibold animate-pulse">GPS-Signal wird abgefragt...</span>
+                        } @else if (standortActionState() === 'success') {
+                          <span class="text-[#1B4332] font-semibold">{{ currentStreetAndNumber() }} • Ziel eingeben</span>
+                        } @else if (standortActionState() === 'gps-warning') {
+                          <span class="text-[#B45309] font-medium">GPS ausgeschaltet oder blockiert • Tippen zum Aktivieren</span>
                         } @else {
-                          <span>{{ currentFullAddress() }}</span>
+                          <span class="text-[#795548] font-light">{{ currentFullAddress() }}</span>
                         }
                       </div>
                     </div>
@@ -179,39 +218,256 @@ interface CuratedDestination {
                     <span class="mat-icon text-lg" aria-hidden="true">map</span>
                   </button>
                 </div>
+
+                <!-- Inline Feedback-Meldung -->
+                @if (standortFeedbackMessage() && standortActionState() !== 'idle') {
+                  <div
+                    class="mt-2.5 pt-2 border-t text-xs flex items-center justify-between gap-2"
+                    [class.border-[#2D6A4F]/20]="standortActionState() === 'success' || standortActionState() === 'locating'"
+                    [class.border-[#D97706]/30]="standortActionState() === 'gps-warning'"
+                  >
+                    <div class="flex items-center gap-1.5 min-w-0 truncate">
+                      @if (standortActionState() === 'locating') {
+                        <span class="mat-icon text-sm animate-spin text-[#2D6A4F]">sync</span>
+                        <span class="text-[#2D6A4F] font-medium truncate">{{ standortFeedbackMessage() }}</span>
+                      } @else if (standortActionState() === 'success') {
+                        <span class="mat-icon text-sm text-[#2D6A4F]">done</span>
+                        <span class="text-[#1B4332] font-semibold truncate">{{ standortFeedbackMessage() }}</span>
+                      } @else if (standortActionState() === 'gps-warning') {
+                        <span class="mat-icon text-sm text-[#D97706]">warning</span>
+                        <span class="text-[#B45309] font-medium truncate">{{ standortFeedbackMessage() }}</span>
+                      }
+                    </div>
+
+                    @if (standortActionState() === 'gps-warning') {
+                      <button
+                        type="button"
+                        (click)="openGpsHelpModal()"
+                        class="px-2 py-0.5 bg-[#D97706] hover:bg-[#B45309] text-white text-[10px] font-bold rounded-md shrink-0 cursor-pointer shadow-2xs"
+                      >
+                        Anleitung
+                      </button>
+                    }
+                  </div>
+                }
+              </div>
             </div>
 
-            <!-- Compact Filter Bar: Optionen & Direkt-Ziele Toggle + D-Ticket Status Badge fitting the full width without horizontal scroll -->
+            <!-- Compact Filter Bar: Optionen & Datum/Uhrzeit Button fitting the full width without horizontal scroll -->
             <div class="flex items-center gap-2 pt-1 w-full">
-              <!-- Toggle Button to expand/collapse options from 'Direkt ab' to 'Verbindung suchen' -->
+              <!-- Toggle Button to expand/collapse options: Only reads 'Optionen' -->
               <button
                 type="button"
                 id="btn-toggle-search-options"
                 (click)="showSearchOptions.set(!showSearchOptions())"
                 class="flex-1 min-w-0 px-3 py-1.5 rounded-lg bg-[#FAF7F2] hover:bg-[#EFEBE6] text-[#2D6A4F] text-xs font-bold border border-[#D7CCC8] hover:border-[#1B4332] flex items-center justify-between gap-1.5 cursor-pointer transition-colors shadow-2xs"
-                [title]="showSearchOptions() ? 'Suchoptionen einklappen' : 'Suchoptionen und Direktziele ausklappen'"
+                title="Optionen ein- oder ausblenden"
                 [attr.aria-expanded]="showSearchOptions()"
-                aria-label="Suchoptionen und Schnellreiseziele umschalten"
+                aria-label="Optionen umschalten"
               >
                 <div class="flex items-center gap-1.5 min-w-0 truncate">
                   <span class="mat-icon text-sm shrink-0" aria-hidden="true">tune</span>
-                  <span class="truncate">{{ showSearchOptions() ? 'Optionen verbergen' : 'Optionen & Direkt-Ziele' }}</span>
+                  <span class="truncate">Optionen</span>
                 </div>
                 <span class="mat-icon text-xs text-[#8D6E63] shrink-0" aria-hidden="true">{{ showSearchOptions() ? 'expand_less' : 'expand_more' }}</span>
               </button>
 
-              <!-- D-Ticket Badge with eco leaf icon placed strictly side-by-side with matching height and no overflow -->
-              @if (searchForm.get('dTicketOnly')?.value) {
-                <span class="inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-[#EDF9F0] border border-[#B7E4C7] text-xs font-bold text-[#1B4332] shrink-0 whitespace-nowrap shadow-2xs">
-                  <span class="mat-icon text-sm text-[#2D6A4F]" aria-hidden="true">eco</span>
-                  <span>D-Ticket</span>
-                </span>
-              } @else {
-                <span class="inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-[#FAF7F2] border border-[#E6DED6] text-xs font-bold text-[#795548] shrink-0 whitespace-nowrap shadow-2xs">
-                  <span>inkl. ICE/IC</span>
-                </span>
-              }
+              <!-- Button to open Date & Time options (replaces D-Ticket badge) -->
+              <button
+                type="button"
+                id="btn-open-datetime-options"
+                (click)="openDatePickerPopup()"
+                class="flex-1 min-w-0 px-3 py-1.5 rounded-lg bg-[#FAF7F2] hover:bg-[#EDF9F0] hover:text-[#1B4332] text-[#4E342E] text-xs font-bold border border-[#D7CCC8] hover:border-[#2D6A4F] flex items-center justify-between gap-1.5 cursor-pointer transition-colors shadow-2xs"
+                title="Reisedatum und Uhrzeit ändern"
+                aria-label="Optionen für Datum und Uhrzeit öffnen"
+                [attr.aria-expanded]="showDatePickerPopup()"
+              >
+                <div class="flex items-center gap-1.5 min-w-0 truncate">
+                  <span class="mat-icon text-sm text-[#2D6A4F] shrink-0" aria-hidden="true">schedule</span>
+                  <span class="truncate">{{ formattedSelectedDate() }}, {{ selectedTime() }} Uhr</span>
+                </div>
+                <span class="mat-icon text-xs text-[#8D6E63] shrink-0" aria-hidden="true">edit</span>
+              </button>
             </div>
+
+            <!-- Custom Unified Date & Time Picker Modal (Centered in Middle of Screen, accessible anywhere) -->
+            @if (showDatePickerPopup()) {
+              <div class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto" role="dialog" aria-modal="true" aria-label="Reisedatum und Uhrzeit auswählen">
+                <!-- Semi-transparent backdrop to focus as main object on screen -->
+                <div
+                  class="fixed inset-0 bg-black/45 backdrop-blur-[2px] transition-opacity animate-in fade-in duration-150"
+                  (click)="closeDatePickerPopup()"
+                  aria-hidden="true"
+                ></div>
+
+                <!-- Centered Main Dialog Card -->
+                <div
+                  class="relative w-full max-w-[340px] sm:max-w-[360px] bg-white border border-[#D7CCC8] rounded-[8px] shadow-2xl p-4 z-10 animate-in fade-in zoom-in-95 duration-150 my-auto"
+                >
+                  <!-- Dialog Header -->
+                  <div class="flex items-center justify-between pb-2 mb-2.5 border-b border-[#EFEBE6]">
+                    <span class="text-xs font-bold text-[#1F1612] flex items-center gap-1.5">
+                      <span class="mat-icon text-sm text-[#2D6A4F]" aria-hidden="true">calendar_month</span>
+                      <span>Reisedatum & Uhrzeit wählen</span>
+                    </span>
+                    <button
+                      type="button"
+                      (click)="closeDatePickerPopup()"
+                      class="w-6 h-6 flex items-center justify-center rounded-[4px] text-[#8D6E63] hover:text-[#2E1F18] hover:bg-[#FAF7F2] cursor-pointer transition-colors"
+                      title="Schließen"
+                      aria-label="Kalender-Dialog schließen"
+                    >
+                      <span class="mat-icon text-sm" aria-hidden="true">close</span>
+                    </button>
+                  </div>
+
+                  <!-- Month Navigation Header -->
+                  <div class="flex items-center justify-between pb-1 mb-2 bg-[#FAF7F2] px-2 py-1 rounded-[4px] border border-[#E6DED6]">
+                    <button
+                      type="button"
+                      (click)="changeCalendarMonth(-1)"
+                      class="w-6 h-6 flex items-center justify-center rounded-[4px] text-[#4E342E] hover:bg-white hover:text-[#2D6A4F] cursor-pointer transition-colors"
+                      title="Vorheriger Monat"
+                      aria-label="Vorheriger Monat"
+                    >
+                      <span class="mat-icon text-sm" aria-hidden="true">chevron_left</span>
+                    </button>
+                    <span class="text-xs font-bold text-[#1F1612] capitalize" aria-live="polite">{{ calendarMonthLabel() }}</span>
+                    <button
+                      type="button"
+                      (click)="changeCalendarMonth(1)"
+                      class="w-6 h-6 flex items-center justify-center rounded-[4px] text-[#4E342E] hover:bg-white hover:text-[#2D6A4F] cursor-pointer transition-colors"
+                      title="Nächster Monat"
+                      aria-label="Nächster Monat"
+                    >
+                      <span class="mat-icon text-sm" aria-hidden="true">chevron_right</span>
+                    </button>
+                  </div>
+
+                  <!-- Quick Day Presets: Heute, Morgen, Wochenende -->
+                  <div class="grid grid-cols-3 gap-1.5 mb-2.5">
+                    <button
+                      type="button"
+                      (click)="setDatePreset('today')"
+                      class="px-1 py-1.5 text-[10px] font-bold rounded-[4px] bg-[#FAF7F2] hover:bg-[#EDF9F0] hover:text-[#1B4332] text-[#4E342E] border border-[#E6DED6] text-center cursor-pointer transition-colors"
+                      aria-label="Reisedatum auf Heute setzen"
+                    >
+                      Heute
+                    </button>
+                    <button
+                      type="button"
+                      (click)="setDatePreset('tomorrow')"
+                      class="px-1 py-1.5 text-[10px] font-bold rounded-[4px] bg-[#FAF7F2] hover:bg-[#EDF9F0] hover:text-[#1B4332] text-[#4E342E] border border-[#E6DED6] text-center cursor-pointer transition-colors"
+                      aria-label="Reisedatum auf Morgen setzen"
+                    >
+                      Morgen
+                    </button>
+                    <button
+                      type="button"
+                      (click)="setDatePreset('weekend')"
+                      class="px-1 py-1.5 text-[10px] font-bold rounded-[4px] bg-[#FAF7F2] hover:bg-[#EDF9F0] hover:text-[#1B4332] text-[#4E342E] border border-[#E6DED6] text-center cursor-pointer transition-colors"
+                      aria-label="Reisedatum auf kommendes Wochenende setzen"
+                    >
+                      Wochenende
+                    </button>
+                  </div>
+
+                  <!-- Day Names Header (Mo, Di, Mi, Do, Fr, Sa, So) -->
+                  <div class="grid grid-cols-7 gap-1 text-center text-[10px] font-bold text-[#8D6E63] uppercase pb-1" aria-hidden="true">
+                    <span>Mo</span>
+                    <span>Di</span>
+                    <span>Mi</span>
+                    <span>Do</span>
+                    <span>Fr</span>
+                    <span>Sa</span>
+                    <span>So</span>
+                  </div>
+
+                  <!-- Calendar Days Grid -->
+                  <div class="grid grid-cols-7 gap-1 text-center text-xs mb-2.5" role="grid" aria-label="Monatsübersicht">
+                    @for (day of calendarGrid(); track day.dateStr) {
+                      <button
+                        type="button"
+                        (click)="selectCalendarDate(day.dateStr)"
+                        class="h-7 w-full flex items-center justify-center rounded-[4px] text-[11px] font-medium transition-colors cursor-pointer"
+                        [class.opacity-30]="!day.isCurrentMonth"
+                        [class.bg-[#2D6A4F]]="day.isSelected"
+                        [class.text-white]="day.isSelected"
+                        [class.font-bold]="day.isSelected || day.isToday"
+                        [class.border]="day.isToday && !day.isSelected"
+                        [class.border-[#2D6A4F]]="day.isToday && !day.isSelected"
+                        [class.text-[#2D6A4F]]="day.isToday && !day.isSelected"
+                        [class.hover:bg-[#EDF9F0]]="!day.isSelected"
+                        [class.hover:text-[#1B4332]]="!day.isSelected"
+                        [class.text-[#2E1F18]]="!day.isSelected && !day.isToday"
+                        [attr.aria-label]="day.dayNumber + '. ' + calendarMonthLabel() + (day.isSelected ? ', ausgewählt' : '') + (day.isToday ? ', heute' : '')"
+                      >
+                        {{ day.dayNumber }}
+                      </button>
+                    }
+                  </div>
+
+                  <!-- Abfahrtszeit anpassen inside modal -->
+                  <div class="flex items-center justify-between gap-2 py-2 border-t border-[#EFEBE6]">
+                    <label for="modal-input-time" class="text-xs font-bold text-[#1F1612] flex items-center gap-1.5 cursor-pointer">
+                      <span class="mat-icon text-sm text-[#2D6A4F]" aria-hidden="true">schedule</span>
+                      <span>Abfahrtszeit:</span>
+                    </label>
+                    <div class="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        (click)="setTimePreset('now')"
+                        class="px-2 py-1 rounded-[4px] bg-[#FAF7F2] hover:bg-[#EDF9F0] text-[#1B4332] border border-[#E6DED6] text-[11px] font-bold cursor-pointer transition-colors shadow-2xs"
+                        title="Auf aktuelle Uhrzeit setzen"
+                        aria-label="Auf aktuelle Uhrzeit setzen"
+                      >
+                        Jetzt
+                      </button>
+                      <input
+                        id="modal-input-time"
+                        type="time"
+                        [value]="selectedTime()"
+                        (input)="onTimeInputChange($event)"
+                        class="px-2 py-1 bg-[#FAF7F2] border border-[#D7CCC8] rounded-[4px] text-[#1F1612] text-xs font-bold focus:ring-1 focus:ring-[#2D6A4F] focus:border-[#2D6A4F]"
+                        aria-label="Abfahrtszeit anpassen"
+                      />
+                      <span class="text-xs font-semibold text-[#795548]">Uhr</span>
+                    </div>
+                  </div>
+
+                  <!-- Horizontal Action Buttons: Löschen, Abbrechen, Festlegen -->
+                  <div class="flex items-center justify-between gap-2 pt-2.5 border-t border-[#EFEBE6]">
+                    <button
+                      type="button"
+                      (click)="clearDatePicker()"
+                      class="flex-1 py-1.5 px-2 text-center bg-[#FAF7F2] hover:bg-[#FBE9E7] text-[#C62828] hover:border-[#EF9A9A] border border-[#E6DED6] text-xs font-semibold rounded-[4px] cursor-pointer transition-colors"
+                      title="Zurücksetzen"
+                      aria-label="Datum und Uhrzeit zurücksetzen"
+                    >
+                      Löschen
+                    </button>
+                    <button
+                      type="button"
+                      (click)="cancelDatePicker()"
+                      class="flex-1 py-1.5 px-2 text-center bg-[#FAF7F2] hover:bg-[#EFEBE6] text-[#5D4037] border border-[#E6DED6] text-xs font-semibold rounded-[4px] cursor-pointer transition-colors"
+                      title="Abbrechen"
+                      aria-label="Auswahl abbrechen"
+                    >
+                      Abbrechen
+                    </button>
+                    <button
+                      type="button"
+                      (click)="applyDatePicker()"
+                      class="flex-1 py-1.5 px-2 text-center bg-[#2D6A4F] hover:bg-[#1B4332] text-white text-xs font-bold rounded-[4px] cursor-pointer transition-colors shadow-2xs"
+                      title="Festlegen"
+                      aria-label="Ausgewähltes Datum und Uhrzeit festlegen"
+                    >
+                      Festlegen
+                    </button>
+                  </div>
+                </div>
+              </div>
+            }
 
             <!-- Wide Search Button when collapsed (matching the aesthetic of Verbindung suchen) -->
             @if (!showSearchOptions()) {
@@ -317,248 +573,6 @@ interface CuratedDestination {
                 >
                   <span class="truncate">{{ formattedSelectedDate() }}</span>
                 </button>
-
-                <!-- Custom Unified Date & Time Picker Modal (Centered in Middle of Screen) -->
-                @if (showDatePickerPopup()) {
-                  <div class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto" role="dialog" aria-modal="true" aria-label="Reisedatum und Uhrzeit auswählen">
-                    <!-- Semi-transparent backdrop to focus as main object on screen -->
-                    <div
-                      class="fixed inset-0 bg-black/45 backdrop-blur-[2px] transition-opacity animate-in fade-in duration-150"
-                      (click)="closeDatePickerPopup()"
-                      aria-hidden="true"
-                    ></div>
-
-                    <!-- Centered Main Dialog Card -->
-                    <div
-                      class="relative w-full max-w-[340px] sm:max-w-[360px] bg-white border border-[#D7CCC8] rounded-[8px] shadow-2xl p-4 z-10 animate-in fade-in zoom-in-95 duration-150 my-auto"
-                    >
-                      <!-- Dialog Header -->
-                      <div class="flex items-center justify-between pb-2 mb-2.5 border-b border-[#EFEBE6]">
-                        <span class="text-xs font-bold text-[#1F1612] flex items-center gap-1.5">
-                          <span class="mat-icon text-sm text-[#2D6A4F]" aria-hidden="true">calendar_month</span>
-                          <span>Reisedatum & Uhrzeit wählen</span>
-                        </span>
-                        <button
-                          type="button"
-                          (click)="closeDatePickerPopup()"
-                          class="w-6 h-6 flex items-center justify-center rounded-[4px] text-[#8D6E63] hover:text-[#2E1F18] hover:bg-[#FAF7F2] cursor-pointer transition-colors"
-                          title="Schließen"
-                          aria-label="Kalender-Dialog schließen"
-                        >
-                          <span class="mat-icon text-sm" aria-hidden="true">close</span>
-                        </button>
-                      </div>
-
-                      <!-- Month Navigation Header -->
-                      <div class="flex items-center justify-between pb-1 mb-2 bg-[#FAF7F2] px-2 py-1 rounded-[4px] border border-[#E6DED6]">
-                        <button
-                          type="button"
-                          (click)="changeCalendarMonth(-1)"
-                          class="w-6 h-6 flex items-center justify-center rounded-[4px] text-[#4E342E] hover:bg-white hover:text-[#2D6A4F] cursor-pointer transition-colors"
-                          title="Vorheriger Monat"
-                          aria-label="Vorheriger Monat"
-                        >
-                          <span class="mat-icon text-sm" aria-hidden="true">chevron_left</span>
-                        </button>
-                        <span class="text-xs font-bold text-[#1F1612] capitalize" aria-live="polite">{{ calendarMonthLabel() }}</span>
-                        <button
-                          type="button"
-                          (click)="changeCalendarMonth(1)"
-                          class="w-6 h-6 flex items-center justify-center rounded-[4px] text-[#4E342E] hover:bg-white hover:text-[#2D6A4F] cursor-pointer transition-colors"
-                          title="Nächster Monat"
-                          aria-label="Nächster Monat"
-                        >
-                          <span class="mat-icon text-sm" aria-hidden="true">chevron_right</span>
-                        </button>
-                      </div>
-
-                      <!-- Quick Day Presets: Heute, Morgen, Wochenende -->
-                      <div class="grid grid-cols-3 gap-1.5 mb-2.5">
-                        <button
-                          type="button"
-                          (click)="setDatePreset('today')"
-                          class="px-1 py-1.5 text-[10px] font-bold rounded-[4px] bg-[#FAF7F2] hover:bg-[#EDF9F0] hover:text-[#1B4332] text-[#4E342E] border border-[#E6DED6] text-center cursor-pointer transition-colors"
-                          aria-label="Reisedatum auf Heute setzen"
-                        >
-                          Heute
-                        </button>
-                        <button
-                          type="button"
-                          (click)="setDatePreset('tomorrow')"
-                          class="px-1 py-1.5 text-[10px] font-bold rounded-[4px] bg-[#FAF7F2] hover:bg-[#EDF9F0] hover:text-[#1B4332] text-[#4E342E] border border-[#E6DED6] text-center cursor-pointer transition-colors"
-                          aria-label="Reisedatum auf Morgen setzen"
-                        >
-                          Morgen
-                        </button>
-                        <button
-                          type="button"
-                          (click)="setDatePreset('weekend')"
-                          class="px-1 py-1.5 text-[10px] font-bold rounded-[4px] bg-[#FAF7F2] hover:bg-[#EDF9F0] hover:text-[#1B4332] text-[#4E342E] border border-[#E6DED6] text-center cursor-pointer transition-colors"
-                          aria-label="Reisedatum auf kommendes Wochenende setzen"
-                        >
-                          Wochenende
-                        </button>
-                      </div>
-
-                      <!-- Day Names Header (Mo, Di, Mi, Do, Fr, Sa, So) -->
-                      <div class="grid grid-cols-7 gap-1 text-center text-[10px] font-bold text-[#8D6E63] uppercase pb-1" aria-hidden="true">
-                        <span>Mo</span>
-                        <span>Di</span>
-                        <span>Mi</span>
-                        <span>Do</span>
-                        <span>Fr</span>
-                        <span>Sa</span>
-                        <span>So</span>
-                      </div>
-
-                      <!-- Calendar Days Grid -->
-                      <div class="grid grid-cols-7 gap-1 text-center text-xs mb-3" role="grid" aria-label="Monatsübersicht">
-                        @for (day of calendarGrid(); track day.dateStr) {
-                          <button
-                            type="button"
-                            (click)="selectCalendarDate(day.dateStr)"
-                            class="h-7 w-full flex items-center justify-center rounded-[4px] text-[11px] font-medium transition-colors cursor-pointer"
-                            [class.opacity-30]="!day.isCurrentMonth"
-                            [class.bg-[#2D6A4F]]="day.isSelected"
-                            [class.text-white]="day.isSelected"
-                            [class.font-bold]="day.isSelected || day.isToday"
-                            [class.border]="day.isToday && !day.isSelected"
-                            [class.border-[#2D6A4F]]="day.isToday && !day.isSelected"
-                            [class.text-[#2D6A4F]]="day.isToday && !day.isSelected"
-                            [class.hover:bg-[#EDF9F0]]="!day.isSelected"
-                            [class.hover:text-[#1B4332]]="!day.isSelected"
-                            [class.text-[#2E1F18]]="!day.isSelected && !day.isToday"
-                            [attr.aria-label]="day.dayNumber + '. ' + calendarMonthLabel() + (day.isSelected ? ', ausgewählt' : '') + (day.isToday ? ', heute' : '')"
-                          >
-                            {{ day.dayNumber }}
-                          </button>
-                        }
-                      </div>
-
-                      <!-- Quick Time Access Options: Jetzt, in 15min, 1h, 2h + Tageszeiten -->
-                      <div class="pt-2.5 border-t border-[#EFEBE6] mb-3 space-y-1.5">
-                        <div class="flex items-center justify-between">
-                          <span class="text-[10px] font-bold text-[#8D6E63] uppercase tracking-wider flex items-center gap-1">
-                            <span class="mat-icon text-[11px] text-[#2D6A4F]" aria-hidden="true">schedule</span>
-                            <span>Uhrzeit wählen</span>
-                          </span>
-                          <span class="text-[10px] font-bold text-[#1B4332] bg-[#EDF9F0] px-1.5 py-0.5 rounded-[4px]">{{ selectedTime() }} Uhr</span>
-                        </div>
-
-                        <!-- 4 Quick Buttons (Jetzt, 15 min, 1h, 2h) -->
-                        <div class="grid grid-cols-4 gap-1">
-                          <button
-                            type="button"
-                            (click)="setTimePreset('now')"
-                            class="px-1 py-1 rounded-[4px] bg-[#FAF7F2] hover:bg-[#EDF9F0] hover:border-[#2D6A4F] text-[#1B4332] border border-[#E6DED6] text-[10px] font-bold flex flex-col items-center gap-0.5 cursor-pointer transition-colors"
-                            title="Jetzt abfahren"
-                            aria-label="Abfahrtszeit auf Jetzt setzen"
-                          >
-                            <span class="mat-icon text-[11px] text-[#2D6A4F]" aria-hidden="true">bolt</span>
-                            <span>Jetzt</span>
-                          </button>
-                          <button
-                            type="button"
-                            (click)="setTimePreset('plus15m')"
-                            class="px-1 py-1 rounded-[4px] bg-[#FAF7F2] hover:bg-[#EFEBE6] hover:border-[#2D6A4F] text-[#3E2723] border border-[#E6DED6] text-[10px] font-bold flex flex-col items-center gap-0.5 cursor-pointer transition-colors"
-                            title="In 15 Minuten"
-                            aria-label="Abfahrtszeit plus 15 Minuten setzen"
-                          >
-                            <span class="mat-icon text-[11px] text-[#2D6A4F]" aria-hidden="true">timer</span>
-                            <span>15 min</span>
-                          </button>
-                          <button
-                            type="button"
-                            (click)="setTimePreset('plus1h')"
-                            class="px-1 py-1 rounded-[4px] bg-[#FAF7F2] hover:bg-[#EFEBE6] hover:border-[#2D6A4F] text-[#3E2723] border border-[#E6DED6] text-[10px] font-bold flex flex-col items-center gap-0.5 cursor-pointer transition-colors"
-                            title="In 1 Stunde"
-                            aria-label="Abfahrtszeit plus 1 Stunde setzen"
-                          >
-                            <span class="mat-icon text-[11px] text-[#795548]" aria-hidden="true">update</span>
-                            <span>1h</span>
-                          </button>
-                          <button
-                            type="button"
-                            (click)="setTimePreset('plus2h')"
-                            class="px-1 py-1 rounded-[4px] bg-[#FAF7F2] hover:bg-[#EFEBE6] hover:border-[#2D6A4F] text-[#3E2723] border border-[#E6DED6] text-[10px] font-bold flex flex-col items-center gap-0.5 cursor-pointer transition-colors"
-                            title="In 2 Stunden"
-                            aria-label="Abfahrtszeit plus 2 Stunden setzen"
-                          >
-                            <span class="mat-icon text-[11px] text-[#795548]" aria-hidden="true">more_time</span>
-                            <span>2h</span>
-                          </button>
-                        </div>
-
-                        <!-- Tageszeiten Presets -->
-                        <div class="grid grid-cols-4 gap-1 pt-0.5">
-                          <button
-                            type="button"
-                            (click)="setTimePreset('morning')"
-                            class="px-1 py-0.5 rounded-[3px] bg-[#FAF7F2] hover:bg-[#EFEBE6] text-[#4E342E] text-[9px] font-semibold border border-[#E6DED6] text-center cursor-pointer"
-                            aria-label="Abfahrtszeit Morgens um 08:00 Uhr"
-                          >
-                            08:00
-                          </button>
-                          <button
-                            type="button"
-                            (click)="setTimePreset('noon')"
-                            class="px-1 py-0.5 rounded-[3px] bg-[#FAF7F2] hover:bg-[#EFEBE6] text-[#4E342E] text-[9px] font-semibold border border-[#E6DED6] text-center cursor-pointer"
-                            aria-label="Abfahrtszeit Mittags um 12:00 Uhr"
-                          >
-                            12:00
-                          </button>
-                          <button
-                            type="button"
-                            (click)="setTimePreset('afternoon')"
-                            class="px-1 py-0.5 rounded-[3px] bg-[#FAF7F2] hover:bg-[#EFEBE6] text-[#4E342E] text-[9px] font-semibold border border-[#E6DED6] text-center cursor-pointer"
-                            aria-label="Abfahrtszeit Nachmittags um 15:30 Uhr"
-                          >
-                            15:30
-                          </button>
-                          <button
-                            type="button"
-                            (click)="setTimePreset('evening')"
-                            class="px-1 py-0.5 rounded-[3px] bg-[#FAF7F2] hover:bg-[#EFEBE6] text-[#4E342E] text-[9px] font-semibold border border-[#E6DED6] text-center cursor-pointer"
-                            aria-label="Abfahrtszeit Abends um 18:00 Uhr"
-                          >
-                            18:00
-                          </button>
-                        </div>
-                      </div>
-
-                      <!-- Horizontal Action Buttons: Löschen, Abbrechen, Festlegen -->
-                      <div class="flex items-center justify-between gap-2 pt-2.5 border-t border-[#EFEBE6]">
-                        <button
-                          type="button"
-                          (click)="clearDatePicker()"
-                          class="flex-1 py-1.5 px-2 text-center bg-[#FAF7F2] hover:bg-[#FBE9E7] text-[#C62828] hover:border-[#EF9A9A] border border-[#E6DED6] text-xs font-semibold rounded-[4px] cursor-pointer transition-colors"
-                          title="Zurücksetzen"
-                          aria-label="Datum und Zeit zurücksetzen"
-                        >
-                          Löschen
-                        </button>
-                        <button
-                          type="button"
-                          (click)="cancelDatePicker()"
-                          class="flex-1 py-1.5 px-2 text-center bg-[#FAF7F2] hover:bg-[#EFEBE6] text-[#5D4037] border border-[#E6DED6] text-xs font-semibold rounded-[4px] cursor-pointer transition-colors"
-                          title="Abbrechen"
-                          aria-label="Datumsauswahl abbrechen"
-                        >
-                          Abbrechen
-                        </button>
-                        <button
-                          type="button"
-                          (click)="applyDatePicker()"
-                          class="flex-1 py-1.5 px-2 text-center bg-[#2D6A4F] hover:bg-[#1B4332] text-white text-xs font-bold rounded-[4px] cursor-pointer transition-colors shadow-2xs"
-                          title="Festlegen"
-                          aria-label="Ausgewähltes Datum und Zeit festlegen"
-                        >
-                          Festlegen
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                }
               </div>
 
               <!-- Time Input with Clock Icon -->
@@ -575,148 +589,6 @@ interface CuratedDestination {
                   aria-label="Abfahrtszeit eingeben"
                   class="w-full pl-7 pr-2.5 py-1.5 bg-[#FAF7F2] border border-[#D7CCC8] rounded-[4px] text-[#2E1F18] text-xs font-semibold focus:ring-1 focus:ring-[#2D6A4F] focus:border-[#2D6A4F] min-w-0"
                 />
-              </div>
-
-              <!-- Quick Time Preset Button OUTSIDE the Time Input right at the end -->
-              <div class="relative shrink-0">
-                <button
-                  type="button"
-                  id="btn-time-tune"
-                  (click)="toggleTimePickerPopup()"
-                  class="w-8 h-[31px] rounded-[4px] bg-[#FAF7F2] hover:bg-[#EDF9F0] hover:border-[#2D6A4F] text-[#4E342E] hover:text-[#1B4332] border border-[#D7CCC8] flex items-center justify-center cursor-pointer transition-colors shadow-2xs"
-                  title="Uhrzeit-Schnellauswahl öffnen"
-                  aria-label="Uhrzeit-Schnellauswahl öffnen"
-                  [attr.aria-expanded]="showTimePickerPopup()"
-                >
-                  <span class="mat-icon text-xs text-[#2D6A4F]" aria-hidden="true">tune</span>
-                </button>
-
-                <!-- Dedicated Centered Time Modal anchored as focused dialog -->
-                @if (showTimePickerPopup()) {
-                  <div class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto" role="dialog" aria-modal="true" aria-label="Abfahrtszeit wählen">
-                    <!-- Semi-transparent backdrop to focus as main object on screen -->
-                    <div
-                      class="fixed inset-0 bg-black/45 backdrop-blur-[2px] transition-opacity animate-in fade-in duration-150"
-                      (click)="closeTimePickerPopup()"
-                      aria-hidden="true"
-                    ></div>
-
-                    <div
-                      class="relative w-full max-w-[300px] bg-white border border-[#D7CCC8] rounded-[8px] shadow-2xl p-4 z-10 animate-in fade-in zoom-in-95 duration-150 my-auto"
-                    >
-                      <div class="flex items-center justify-between pb-2 mb-2.5 border-b border-[#EFEBE6]">
-                        <span class="text-xs font-bold text-[#1F1612] flex items-center gap-1.5">
-                          <span class="mat-icon text-sm text-[#2D6A4F]" aria-hidden="true">schedule</span>
-                          <span>Abfahrtszeit wählen</span>
-                        </span>
-                        <button
-                          type="button"
-                          (click)="showTimePickerPopup.set(false)"
-                          class="w-6 h-6 flex items-center justify-center rounded-[4px] text-[#8D6E63] hover:text-[#2E1F18] hover:bg-[#FAF7F2] cursor-pointer transition-colors"
-                          title="Schließen"
-                          aria-label="Uhrzeit-Auswahl schließen"
-                        >
-                          <span class="mat-icon text-sm" aria-hidden="true">close</span>
-                        </button>
-                      </div>
-
-                      <!-- Schnellauswahl: Jetzt, in 15 min, in 1h, in 2h -->
-                      <div class="text-[10px] font-bold text-[#8D6E63] uppercase tracking-wider mb-1.5">Schnelloptionen</div>
-                      <div class="grid grid-cols-4 gap-1 mb-2.5">
-                        <button
-                          type="button"
-                          (click)="setTimePreset('now'); showTimePickerPopup.set(false)"
-                          class="px-1 py-1.5 rounded-[4px] bg-[#FAF7F2] hover:bg-[#EDF9F0] hover:border-[#2D6A4F] text-[#1B4332] border border-[#E6DED6] text-[10px] font-bold flex flex-col items-center gap-0.5 cursor-pointer shadow-2xs transition-colors"
-                          title="Jetzt abfahren"
-                          aria-label="Jetzt abfahren"
-                        >
-                          <span class="mat-icon text-xs text-[#2D6A4F]" aria-hidden="true">bolt</span>
-                          <span>Jetzt</span>
-                        </button>
-                        <button
-                          type="button"
-                          (click)="setTimePreset('plus15m'); showTimePickerPopup.set(false)"
-                          class="px-1 py-1.5 rounded-[4px] bg-[#FAF7F2] hover:bg-[#EFEBE6] hover:border-[#2D6A4F] text-[#3E2723] border border-[#E6DED6] text-[10px] font-bold flex flex-col items-center gap-0.5 cursor-pointer shadow-2xs transition-colors"
-                          title="In 15 Minuten"
-                          aria-label="In 15 Minuten abfahren"
-                        >
-                          <span class="mat-icon text-xs text-[#2D6A4F]" aria-hidden="true">timer</span>
-                          <span>15 min</span>
-                        </button>
-                        <button
-                          type="button"
-                          (click)="setTimePreset('plus1h'); showTimePickerPopup.set(false)"
-                          class="px-1 py-1.5 rounded-[4px] bg-[#FAF7F2] hover:bg-[#EFEBE6] hover:border-[#2D6A4F] text-[#3E2723] border border-[#E6DED6] text-[10px] font-bold flex flex-col items-center gap-0.5 cursor-pointer shadow-2xs transition-colors"
-                          title="In 1 Stunde"
-                          aria-label="In 1 Stunde abfahren"
-                        >
-                          <span class="mat-icon text-xs text-[#795548]" aria-hidden="true">update</span>
-                          <span>1h</span>
-                        </button>
-                        <button
-                          type="button"
-                          (click)="setTimePreset('plus2h'); showTimePickerPopup.set(false)"
-                          class="px-1 py-1.5 rounded-[4px] bg-[#FAF7F2] hover:bg-[#EFEBE6] hover:border-[#2D6A4F] text-[#3E2723] border border-[#E6DED6] text-[10px] font-bold flex flex-col items-center gap-0.5 cursor-pointer shadow-2xs transition-colors"
-                          title="In 2 Stunden"
-                          aria-label="In 2 Stunden abfahren"
-                        >
-                          <span class="mat-icon text-xs text-[#795548]" aria-hidden="true">more_time</span>
-                          <span>2h</span>
-                        </button>
-                      </div>
-
-                      <!-- Tageszeiten Presets -->
-                      <div class="text-[10px] font-bold text-[#8D6E63] uppercase tracking-wider mb-1.5">Tageszeiten</div>
-                      <div class="grid grid-cols-2 gap-1.5 mb-3">
-                        <button
-                          type="button"
-                          (click)="setTimePreset('morning'); showTimePickerPopup.set(false)"
-                          class="px-2 py-1.5 rounded-[4px] bg-[#FAF7F2] hover:bg-[#EFEBE6] text-[#3E2723] text-[11px] font-semibold border border-[#E6DED6] flex items-center justify-between cursor-pointer"
-                          aria-label="Abfahrtszeit Morgens um 08:00 Uhr"
-                        >
-                          <span>Morgens</span>
-                          <span class="text-[10px] text-[#8D6E63] font-normal">08:00</span>
-                        </button>
-                        <button
-                          type="button"
-                          (click)="setTimePreset('noon'); showTimePickerPopup.set(false)"
-                          class="px-2 py-1.5 rounded-[4px] bg-[#FAF7F2] hover:bg-[#EFEBE6] text-[#3E2723] text-[11px] font-semibold border border-[#E6DED6] flex items-center justify-between cursor-pointer"
-                          aria-label="Abfahrtszeit Mittags um 12:00 Uhr"
-                        >
-                          <span>Mittags</span>
-                          <span class="text-[10px] text-[#8D6E63] font-normal">12:00</span>
-                        </button>
-                        <button
-                          type="button"
-                          (click)="setTimePreset('afternoon'); showTimePickerPopup.set(false)"
-                          class="px-2 py-1.5 rounded-[4px] bg-[#FAF7F2] hover:bg-[#EFEBE6] text-[#3E2723] text-[11px] font-semibold border border-[#E6DED6] flex items-center justify-between cursor-pointer"
-                          aria-label="Abfahrtszeit Nachmittags um 15:30 Uhr"
-                        >
-                          <span>Nachmittags</span>
-                          <span class="text-[10px] text-[#8D6E63] font-normal">15:30</span>
-                        </button>
-                        <button
-                          type="button"
-                          (click)="setTimePreset('evening'); showTimePickerPopup.set(false)"
-                          class="px-2 py-1.5 rounded-[4px] bg-[#FAF7F2] hover:bg-[#EFEBE6] text-[#3E2723] text-[11px] font-semibold border border-[#E6DED6] flex items-center justify-between cursor-pointer"
-                          aria-label="Abfahrtszeit Abends um 18:00 Uhr"
-                        >
-                          <span>Abends</span>
-                          <span class="text-[10px] text-[#8D6E63] font-normal">18:00</span>
-                        </button>
-                      </div>
-
-                      <button
-                        type="button"
-                        (click)="showTimePickerPopup.set(false)"
-                        class="w-full py-1.5 text-center bg-[#2D6A4F] hover:bg-[#1B4332] text-white text-xs font-bold rounded-[4px] cursor-pointer transition-colors shadow-2xs"
-                        aria-label="Ausgewählte Uhrzeit übernehmen"
-                      >
-                        Übernehmen
-                      </button>
-                    </div>
-                  </div>
-                }
               </div>
             </div>
 
@@ -919,373 +791,584 @@ interface CuratedDestination {
                 </div>
               </div>
             } @else if (journeys().length > 0) {
-              <!-- Results Header & Sort Controls with floating separated Leaf and Title badges on top border -->
-              <div class="relative bg-white p-3 sm:p-3.5 pt-4 sm:pt-4.5 rounded-xl sm:rounded-2xl border border-[#E6DED6] shadow-xs flex flex-wrap items-center justify-between gap-2.5">
-                
-                <!-- Floating Eco Badges over the top border: Leaf Icon badge separated from Verbindungen Name badge -->
-                <div class="absolute -top-3.5 left-4 flex items-center gap-1.5 z-10 select-none">
-                  <!-- 1. Separate Leaf Icon Badge with negative margin over container border -->
-                  <div class="inline-flex items-center justify-center w-7 h-7 bg-white border border-[#B7E4C7] rounded-full shadow-2xs">
-                    <span class="mat-icon text-[16px] text-[#2D6A4F] transform scale-110">eco</span>
-                  </div>
-                  <!-- 2. Separate Verbindungen Name Badge with negative margin over container border -->
-                  <div class="inline-flex items-center px-3 py-0.5 bg-white border border-[#B7E4C7] rounded-full shadow-2xs">
-                    <span class="tracking-wide text-xs font-black uppercase text-[#1B4332]">
-                      Verbindungen ({{ sortedJourneys().length }})
-                    </span>
-                  </div>
-                </div>
-
-                <!-- Subtitle: Origin → Destination -->
-                <div class="flex items-center gap-2 min-w-0 pt-0.5">
-                  <span class="text-xs text-[#795548] font-semibold truncate">
-                    {{ fromStation()?.name || 'Aktueller Standort' }} → {{ toStation()?.name }}
-                  </span>
-                </div>
-
-                <div class="flex items-center gap-2 shrink-0">
-                  <!-- Neue Suche Button -->
+              
+              <!-- PROMINENT VIEW TOGGLE & MAP EXPAND/COLLAPSE CONTROL BAR (Standard Travel App Pattern) -->
+              <div class="bg-white rounded-2xl p-2.5 sm:p-3 border border-[#E6DED6] shadow-xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5" role="toolbar" aria-label="Ergebnis-Ansicht umschalten">
+                <!-- Left: Mode Switcher (Liste / Karte) -->
+                <div class="inline-flex items-center p-1 bg-[#FAF7F2] rounded-xl border border-[#E6DED6] shadow-2xs" role="tablist" aria-label="Ansichtsmodus">
+                  <!-- 1. List Mode Button -->
                   <button
                     type="button"
-                    id="btn-new-search-header"
-                    (click)="resetSearch()"
-                    class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-[#FAF7F2] hover:bg-[#EDF9F0] text-[#795548] hover:text-[#1B4332] border border-[#E6DED6] hover:border-[#B7E4C7] transition-all cursor-pointer shadow-2xs"
-                    title="Neue Suche starten und zurück zur Eingabe"
-                    aria-label="Neue Suche starten"
+                    id="toggle-results-mode-list"
+                    (click)="setResultsViewMode('list')"
+                    role="tab"
+                    [attr.aria-selected]="resultsViewMode() === 'list'"
+                    class="flex-1 sm:flex-initial px-3.5 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-black transition-all flex items-center justify-center gap-2 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[#2D6A4F]"
+                    [class.bg-[#1B4332]]="resultsViewMode() === 'list'"
+                    [class.text-white]="resultsViewMode() === 'list'"
+                    [class.shadow-xs]="resultsViewMode() === 'list'"
+                    [class.text-[#4E342E]]="resultsViewMode() !== 'list'"
+                    [class.hover:text-[#1B4332]]="resultsViewMode() !== 'list'"
+                    [class.hover:bg-white/50]="resultsViewMode() !== 'list'"
+                    aria-label="Listenansicht der Verbindungen anzeigen"
                   >
-                    <span class="mat-icon text-xs text-[#2D6A4F]" aria-hidden="true">arrow_back</span>
-                    <span class="text-[11px]">Neue Suche</span>
+                    <span class="mat-icon text-base leading-none" aria-hidden="true">format_list_bulleted</span>
+                    <span>Liste</span>
+                    <span
+                      class="text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none shrink-0"
+                      [class.bg-white/20]="resultsViewMode() === 'list'"
+                      [class.text-white]="resultsViewMode() === 'list'"
+                      [class.bg-[#E6DED6]]="resultsViewMode() !== 'list'"
+                      [class.text-[#4E342E]]="resultsViewMode() !== 'list'"
+                    >
+                      {{ sortedJourneys().length }}
+                    </span>
                   </button>
 
-                  <!-- Compact Sort Toggle Button (Expandable) -->
+                  <!-- 2. Map Mode Button -->
                   <button
                     type="button"
-                    id="btn-sort-toggle"
-                    (click)="toggleSortOptions()"
-                    class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#FAF7F2] hover:bg-[#EDF9F0] text-[#4E342E] hover:text-[#1B4332] border border-[#E6DED6] hover:border-[#B7E4C7] transition-all cursor-pointer shadow-2xs shrink-0"
-                    [class.bg-[#EDF9F0]]="showSortOptions()"
-                    [class.border-[#B7E4C7]]="showSortOptions()"
-                    [class.text-[#1B4332]]="showSortOptions()"
-                    title="Sortieroptionen anzeigen oder verbergen"
-                    [attr.aria-expanded]="showSortOptions()"
-                    aria-label="Sortieroptionen umschalten"
+                    id="toggle-results-mode-map"
+                    (click)="setResultsViewMode('map')"
+                    role="tab"
+                    [attr.aria-selected]="resultsViewMode() === 'map'"
+                    class="flex-1 sm:flex-initial px-3.5 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-black transition-all flex items-center justify-center gap-2 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[#2D6A4F]"
+                    [class.bg-[#1B4332]]="resultsViewMode() === 'map'"
+                    [class.text-white]="resultsViewMode() === 'map'"
+                    [class.shadow-xs]="resultsViewMode() === 'map'"
+                    [class.text-[#4E342E]]="resultsViewMode() !== 'map'"
+                    [class.hover:text-[#1B4332]]="resultsViewMode() !== 'map'"
+                    [class.hover:bg-white/50]="resultsViewMode() !== 'map'"
+                    aria-label="Kartenfokus-Modus mit Routenverlauf anzeigen"
                   >
-                    <span class="text-[11px]">{{ getSortLabel() }}</span>
-                    <span class="mat-icon text-xs text-[#795548] transition-transform duration-200" [class.rotate-180]="showSortOptions()" aria-hidden="true">expand_more</span>
+                    <span class="mat-icon text-base leading-none" aria-hidden="true">map</span>
+                    <span>Karte</span>
+                    <span
+                      class="text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none shrink-0"
+                      [class.bg-white/20]="resultsViewMode() === 'map'"
+                      [class.text-white]="resultsViewMode() === 'map'"
+                      [class.bg-[#E6DED6]]="resultsViewMode() !== 'map'"
+                      [class.text-[#4E342E]]="resultsViewMode() !== 'map'"
+                    >
+                      Live
+                    </span>
+                  </button>
+                </div>
+
+                <!-- Right: Expand / Collapse Map View & Quick Preview -->
+                <div class="flex items-center gap-2 justify-end">
+                  @if (resultsViewMode() === 'list' && !isMapExpanded()) {
+                    <!-- Quick Map Preview Toggle for List Mode -->
+                    <button
+                      type="button"
+                      id="btn-quick-preview-map"
+                      (click)="toggleInlineMapPreview()"
+                      class="px-3 py-1.5 rounded-xl border border-[#B7E4C7] bg-[#EDF9F0] hover:bg-[#D8F3DC] text-xs font-black text-[#1B4332] transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs whitespace-nowrap"
+                      [title]="showInlineMapPreview() ? 'Karte einklappen' : 'Karten-Vorschau oben einblenden'"
+                      [attr.aria-expanded]="showInlineMapPreview()"
+                      aria-label="Karten-Vorschau einblenden oder ausblenden"
+                    >
+                      <span class="mat-icon text-sm text-[#2D6A4F]" aria-hidden="true">{{ showInlineMapPreview() ? 'visibility_off' : 'visibility' }}</span>
+                      <span>{{ showInlineMapPreview() ? 'Karte ausblenden' : 'Karte einblenden' }}</span>
+                    </button>
+                  }
+
+                  <!-- Primary Expand / Collapse Map View Toggle -->
+                  <button
+                    type="button"
+                    id="btn-toggle-expand-map"
+                    (click)="toggleMapExpandCollapse()"
+                    class="px-3 py-1.5 rounded-xl border border-[#E6DED6] hover:border-[#2D6A4F] bg-[#FAF7F2] hover:bg-white text-xs font-bold text-[#1F1612] transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs whitespace-nowrap"
+                    [title]="getMapToggleTooltip()"
+                    [attr.aria-expanded]="isMapExpanded()"
+                    aria-label="Kartenansicht vergrößern oder verkleinern"
+                  >
+                    <span class="mat-icon text-sm text-[#2D6A4F]" aria-hidden="true">
+                      {{ isMapExpanded() ? 'unfold_less' : 'unfold_more' }}
+                    </span>
+                    <span>{{ isMapExpanded() ? 'Karte einklappen' : 'Karte vergrößern' }}</span>
                   </button>
                 </div>
               </div>
 
-              <!-- Collapsible Compact Sort Options -->
-              @if (showSortOptions()) {
-                <div class="flex items-center justify-end gap-1.5 px-3 py-1.5 bg-[#FAF7F2] rounded-xl border border-[#E6DED6] shadow-2xs -mt-2 animate-in fade-in zoom-in-95 duration-100 flex-wrap" role="group" aria-label="Sortierkriterien">
-                  <button
-                    type="button"
-                    (click)="setSortCriteria('fastest')"
-                    [class.bg-[#1B4332]]="sortBy() === 'fastest'"
-                    [class.text-white]="sortBy() === 'fastest'"
-                    [class.border-[#1B4332]]="sortBy() === 'fastest'"
-                    [class.bg-white]="sortBy() !== 'fastest'"
-                    [class.text-[#4E342E]]="sortBy() !== 'fastest'"
-                    [class.border-[#D7CCC8]]="sortBy() !== 'fastest'"
-                    class="px-2.5 py-0.5 rounded-full text-[11px] font-bold transition-all cursor-pointer border shadow-2xs hover:border-[#2D6A4F] shrink-0 flex items-center gap-1"
-                    title="Nach kürzester Reisezeit sortieren"
-                    [attr.aria-pressed]="sortBy() === 'fastest'"
-                    aria-label="Nach kürzester Reisezeit sortieren"
+              <!-- ================================================================= -->
+              <!-- 1. MAP FOCUS MODE (resultsViewMode === 'map')                     -->
+              <!-- ================================================================= -->
+              @if (resultsViewMode() === 'map') {
+                <div class="space-y-3.5 animate-in fade-in duration-200" role="region" aria-label="Kartenansicht und Routenauswahl">
+                  
+                  <!-- Selected Route Header Banner above Map -->
+                  @if (activeJourneyForMap(); as activeJ) {
+                    <div class="bg-white rounded-2xl p-3 sm:p-4 border border-[#B7E4C7] shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                      <div class="min-w-0">
+                        <div class="flex items-center gap-2 flex-wrap">
+                          <span class="text-[11px] font-black uppercase tracking-wider text-[#1B4332] bg-[#EDF9F0] px-2 py-0.5 rounded-md border border-[#B7E4C7]">
+                            Aktive Route auf Karte
+                          </span>
+                          <span class="text-xs text-[#795548] font-bold truncate">
+                            ab {{ activeJ.origin.name }} nach {{ activeJ.destination.name }}
+                          </span>
+                        </div>
+                        <div class="flex items-baseline gap-2 mt-1">
+                          <span class="text-xl sm:text-2xl font-black text-[#1F1612] tracking-tight">
+                            {{ formatTime(activeJ.departure) }} ➔ {{ formatTime(activeJ.arrival) }}
+                          </span>
+                          <span class="text-xs sm:text-sm font-bold text-[#2D6A4F]">
+                            ({{ formatHvvDuration(activeJ.durationMinutes) }} • {{ activeJ.transfers === 0 ? 'Direkt' : activeJ.transfers + ' Umstieg' + (activeJ.transfers > 1 ? 'e' : '') }})
+                          </span>
+                        </div>
+                      </div>
+
+                      <div class="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+                        <button
+                          type="button"
+                          id="btn-open-detail-from-map-header"
+                          (click)="openJourneyDetail(activeJ)"
+                          class="px-3.5 py-2 rounded-xl bg-[#1B4332] hover:bg-[#132A1E] text-white text-xs font-black shadow-xs flex items-center gap-1.5 cursor-pointer transition-colors whitespace-nowrap"
+                          title="Vollständigen Reiseplan und Umstiege öffnen"
+                          aria-label="Fahrtdetails und Zwischenhalte anzeigen"
+                        >
+                          <span class="mat-icon text-sm" aria-hidden="true">format_list_numbered</span>
+                          <span>Fahrtdetails</span>
+                        </button>
+                      </div>
+                    </div>
+                  }
+
+                  <!-- Prominent Interactive Map -->
+                  <div
+                    class="w-full rounded-2xl overflow-hidden border border-[#E6DED6] shadow-sm relative transition-all duration-300 bg-[#EFEBE6]"
+                    [class.h-[380px]]="!isMapExpanded()"
+                    [class.sm:h-[460px]]="!isMapExpanded()"
+                    [class.h-[580px]]="isMapExpanded()"
+                    [class.sm:h-[660px]]="isMapExpanded()"
                   >
-                    <span aria-hidden="true">⚡</span>
-                    <span>Schnellste</span>
-                  </button>
-                  <button
-                    type="button"
-                    (click)="setSortCriteria('fewest-transfers')"
-                    [class.bg-[#1B4332]]="sortBy() === 'fewest-transfers'"
-                    [class.text-white]="sortBy() === 'fewest-transfers'"
-                    [class.border-[#1B4332]]="sortBy() === 'fewest-transfers'"
-                    [class.bg-white]="sortBy() !== 'fewest-transfers'"
-                    [class.text-[#4E342E]]="sortBy() !== 'fewest-transfers'"
-                    [class.border-[#D7CCC8]]="sortBy() !== 'fewest-transfers'"
-                    class="px-2.5 py-0.5 rounded-full text-[11px] font-bold transition-all cursor-pointer border shadow-2xs hover:border-[#2D6A4F] shrink-0 flex items-center gap-1"
-                    title="Nach wenigsten Umstiegen sortieren"
-                    [attr.aria-pressed]="sortBy() === 'fewest-transfers'"
-                    aria-label="Nach wenigsten Umstiegen sortieren"
-                  >
-                    <span aria-hidden="true">🔄</span>
-                    <span>Umstiege</span>
-                  </button>
-                  <button
-                    type="button"
-                    (click)="setSortCriteria('departure')"
-                    [class.bg-[#1B4332]]="sortBy() === 'departure'"
-                    [class.text-white]="sortBy() === 'departure'"
-                    [class.border-[#1B4332]]="sortBy() === 'departure'"
-                    [class.bg-white]="sortBy() !== 'departure'"
-                    [class.text-[#4E342E]]="sortBy() !== 'departure'"
-                    [class.border-[#D7CCC8]]="sortBy() !== 'departure'"
-                    class="px-2.5 py-0.5 rounded-full text-[11px] font-bold transition-all cursor-pointer border shadow-2xs hover:border-[#2D6A4F] shrink-0 flex items-center gap-1"
-                    title="Nach Abfahrtszeit sortieren"
-                    [attr.aria-pressed]="sortBy() === 'departure'"
-                    aria-label="Nach Abfahrtszeit sortieren"
-                  >
-                    <span aria-hidden="true">⏰</span>
-                    <span>Abfahrt</span>
-                  </button>
+                    <app-map-view
+                      #resultsMapView
+                      [activeJourney]="activeJourneyForMap()"
+                      [selectedStation]="toStation()"
+                      [isFullBleed]="true"
+                    ></app-map-view>
+                  </div>
+
+                  <!-- Horizontal Connection Deck / Carousel: Select connections right from the map -->
+                  <div class="bg-white rounded-2xl p-4 border border-[#E6DED6] shadow-xs space-y-3">
+                    <div class="flex items-center justify-between gap-2 flex-wrap pb-1">
+                      <div class="flex items-center gap-2">
+                        <span class="mat-icon text-base text-[#2D6A4F]" aria-hidden="true">touch_app</span>
+                        <h3 class="text-sm font-black text-[#1F1612] tracking-tight">
+                          Verbindung wählen ({{ sortedJourneys().length }})
+                        </h3>
+                        <span class="text-[11px] text-[#795548] font-medium hidden sm:inline">
+                          Klicke auf eine Fahrt, um den Verlauf auf der Karte anzuzeigen
+                        </span>
+                      </div>
+
+                      @if (destinationWeather(); as weather) {
+                        <div class="inline-flex items-center gap-1.5 text-xs text-[#1F1612] font-semibold bg-[#FAF7F2] px-2.5 py-1 rounded-full border border-[#E6DED6]">
+                          <span aria-hidden="true">{{ weather.icon }}</span>
+                          <span>{{ weather.temperature }}°C {{ weather.cityName }}</span>
+                        </div>
+                      }
+                    </div>
+
+                    <!-- Scrollable Connection Cards Row -->
+                    <div class="flex items-stretch gap-3 overflow-x-auto pb-2 pt-1 snap-x scroll-smooth focus:outline-none" tabindex="0" role="listbox" aria-label="Gefundene Fahrten für die Kartenansicht">
+                      @for (journey of sortedJourneys(); track journey.id) {
+                        @let isSelected = activeJourneyForMap()?.id === journey.id;
+                        <div
+                          (click)="selectJourneyForMap(journey, $event)"
+                          (keydown.enter)="selectJourneyForMap(journey, $event)"
+                          (keydown.space)="selectJourneyForMap(journey, $event)"
+                          role="option"
+                          [attr.aria-selected]="isSelected"
+                          tabindex="0"
+                          class="shrink-0 w-64 sm:w-72 p-3.5 rounded-xl border transition-all cursor-pointer snap-start relative outline-none focus-visible:ring-2 focus-visible:ring-[#2D6A4F] flex flex-col justify-between gap-2.5"
+                          [class.border-[#2D6A4F]]="isSelected"
+                          [class.bg-[#EDF9F0]]="isSelected"
+                          [class.shadow-md]="isSelected"
+                          [class.border-[#E6DED6]]="!isSelected"
+                          [class.bg-white]="!isSelected"
+                          [class.hover:bg-[#FAF7F2]]="!isSelected"
+                          [class.hover:border-[#B7E4C7]]="!isSelected"
+                          [attr.aria-label]="'Fahrt von ' + formatTime(journey.departure) + ' bis ' + formatTime(journey.arrival) + ' auswählen'"
+                        >
+                          <div>
+                            <!-- Header badge -->
+                            <div class="flex items-center justify-between gap-1 mb-1.5">
+                              @if (isSelected) {
+                                <span class="inline-flex items-center gap-1 text-[10px] font-black text-[#1B4332] bg-white px-2 py-0.5 rounded-full border border-[#B7E4C7]">
+                                  <span class="inline-block w-1.5 h-1.5 rounded-full bg-[#2D6A4F] animate-pulse"></span>
+                                  Auf Karte aktiv
+                                </span>
+                              } @else if ($index === 0) {
+                                <span class="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#EDF9F0] text-[#1B4332]">
+                                  Empfehlung
+                                </span>
+                              } @else {
+                                <span class="text-[10px] text-[#795548] font-bold">
+                                  Option {{ $index + 1 }}
+                                </span>
+                              }
+
+                              <span class="text-xs font-black text-[#1F1612]">
+                                {{ formatHvvDuration(journey.durationMinutes) }}
+                              </span>
+                            </div>
+
+                            <!-- Departure ➔ Arrival -->
+                            <div class="flex items-baseline gap-1.5">
+                              <span class="text-lg sm:text-xl font-black text-[#1F1612] tracking-tight">
+                                {{ formatTime(journey.departure) }}
+                              </span>
+                              <span class="text-sm font-black text-[#1F1612] select-none" aria-hidden="true">➔</span>
+                              <span class="text-lg sm:text-xl font-black text-[#1F1612] tracking-tight">
+                                {{ formatTime(journey.arrival) }}
+                              </span>
+                            </div>
+
+                            <!-- Route Badges -->
+                            <div class="flex items-center gap-1.5 flex-wrap pt-1.5">
+                              @for (seg of getDisplayRouteSegments(journey); track $index) {
+                                @if (seg.type === 'walk') {
+                                  <span class="inline-flex items-center text-[11px] font-bold text-[#1F1612]">
+                                    <span class="mat-icon text-sm" aria-hidden="true">directions_walk</span>
+                                    <span>{{ seg.durationMinutes }}m</span>
+                                  </span>
+                                } @else {
+                                  <span
+                                    class="inline-flex items-center px-1.5 py-0.5 text-[10px] font-black shadow-2xs uppercase tracking-tight"
+                                    [class]="(seg.style?.bg || 'bg-[#1F1612]') + ' ' + (seg.style?.text || 'text-white') + ' ' + (seg.style?.shape || 'rounded')"
+                                  >
+                                    {{ seg.lineName }}
+                                  </span>
+                                }
+                                @if ($index < getDisplayRouteSegments(journey).length - 1) {
+                                  <span class="text-[10px] font-bold text-[#8D6E63] select-none">›</span>
+                                }
+                              }
+                            </div>
+                          </div>
+
+                          <!-- Action row -->
+                          <div class="pt-2 border-t border-[#EDE5DC] flex items-center justify-between text-xs">
+                            <span class="text-[11px] text-[#1B4332] font-bold">100% D-Ticket</span>
+                            <button
+                              type="button"
+                              (click)="openJourneyDetail(journey); $event.stopPropagation()"
+                              class="text-[#795548] hover:text-[#1B4332] font-black flex items-center gap-0.5 cursor-pointer text-xs"
+                              aria-label="Fahrtdetails öffnen"
+                            >
+                              <span>Details</span>
+                              <span class="mat-icon text-xs">arrow_forward</span>
+                            </button>
+                          </div>
+                        </div>
+                      }
+                    </div>
+                  </div>
+
+                  <!-- Pagination Bar & Switch to List button -->
+                  <div class="flex items-center justify-between gap-2 pt-1 flex-wrap">
+                    <button
+                      type="button"
+                      id="btn-earlier-page-map"
+                      (click)="shiftTimeBy(-1)"
+                      class="px-3 py-1.5 rounded-xl bg-white hover:bg-[#FAF7F2] text-[#4E342E] border border-[#E6DED6] text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-2xs transition-colors"
+                      aria-label="Frühere Verbindungen anzeigen"
+                    >
+                      <span class="mat-icon text-sm" aria-hidden="true">arrow_back</span>
+                      <span>Frühere (-1 Std.)</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      id="btn-switch-to-list-from-bottom"
+                      (click)="setResultsViewMode('list')"
+                      class="px-3.5 py-1.5 rounded-xl bg-[#FAF7F2] hover:bg-[#EDE5DC] text-[#1F1612] border border-[#D7CCC8] text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-2xs transition-colors"
+                      aria-label="Zurück zur Listenansicht"
+                    >
+                      <span class="mat-icon text-sm text-[#2D6A4F]" aria-hidden="true">format_list_bulleted</span>
+                      <span>Zur Listenansicht</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      id="btn-later-page-map"
+                      (click)="shiftTimeBy(1)"
+                      class="px-3 py-1.5 rounded-xl bg-white hover:bg-[#FAF7F2] text-[#1B4332] border border-[#B7E4C7] text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-2xs transition-colors"
+                      aria-label="Spätere Verbindungen anzeigen"
+                    >
+                      <span>Spätere (+1 Std.)</span>
+                      <span class="mat-icon text-sm text-[#2D6A4F]" aria-hidden="true">arrow_forward</span>
+                    </button>
+                  </div>
+
                 </div>
               }
 
-              <!-- Linear Connections List (Switch Style, Compact, Clean & Clickable for full details) -->
-              <div class="space-y-3" role="feed" aria-label="Gefundene Fahrtverbindungen">
-                @for (journey of sortedJourneys(); track journey.id) {
-                  @let comfort = getTransferComfort(journey);
-                  @let dynamicBadge = getDynamicSortBadge(journey, $index);
-
-                  <div
-                    (click)="openJourneyDetail(journey)"
-                    (keydown.enter)="openJourneyDetail(journey)"
-                    (keydown.space)="openJourneyDetail(journey)"
-                    role="button"
-                    tabindex="0"
-                    class="group bg-white hover:bg-[#FAF7F2] rounded-xl sm:rounded-2xl p-3.5 sm:p-4 border transition-all duration-150 cursor-pointer shadow-2xs hover:shadow-md hover:border-[#2D6A4F] relative space-y-2.5 outline-none focus-visible:ring-2 focus-visible:ring-[#2D6A4F]"
-                    [class.border-[#2D6A4F]]="$index === 0"
-                    [class.border-[#E6DED6]]="$index !== 0"
-                    [attr.aria-label]="'Fahrt von ' + formatTime(journey.departure) + ' bis ' + formatTime(journey.arrival) + ' Uhr, Reisedauer ' + (journey.durationFormatted || formatDuration(journey.durationMinutes)) + ', ' + comfort.shortLabel + '. Details öffnen.'"
-                  >
-                    <!-- Top Line: Times, Realtime Delays, Badges -->
-                    <div class="flex items-center justify-between gap-2 pb-2 border-b border-[#EDE5DC] flex-wrap">
-                      <!-- Times & Real-time Delay -->
-                      <div class="flex items-baseline gap-2">
-                        <span class="text-xl sm:text-2xl font-black text-[#1F1612] tracking-tight">
-                          {{ formatTime(journey.departure) }}
-                        </span>
-                        <span class="text-xs font-bold text-[#8D6E63]">bis</span>
-                        <span class="text-xl sm:text-2xl font-black text-[#1F1612] tracking-tight">
-                          {{ formatTime(journey.arrival) }}
-                        </span>
-                        
-                        @if (journey.hasDelay && journey.maxDelay > 0) {
-                          <span class="text-[11px] font-bold text-[#E65100] bg-[#FFF3E0] px-2 py-0.5 rounded-full border border-[#FFE0B2]">
-                            +{{ journey.maxDelay }} Min.
+              <!-- ================================================================= -->
+              <!-- 2. LIST FOCUS MODE (resultsViewMode === 'list')                    -->
+              <!-- ================================================================= -->
+              @if (resultsViewMode() === 'list') {
+                <div class="space-y-3.5 animate-in fade-in duration-200">
+                  
+                  <!-- Expandable Inline Map Preview (when toggled or expanded) -->
+                  @if (showInlineMapPreview() || isMapExpanded()) {
+                    <div class="bg-white rounded-2xl p-3 sm:p-4 border border-[#B7E4C7] shadow-xs space-y-2.5 animate-in fade-in slide-in-from-top-2 duration-200" role="region" aria-label="Eingeblendete Kartenansicht">
+                      <div class="flex items-center justify-between gap-2 flex-wrap">
+                        <div class="flex items-center gap-2">
+                          <span class="mat-icon text-base text-[#2D6A4F]" aria-hidden="true">map</span>
+                          <span class="text-xs sm:text-sm font-black text-[#1F1612]">
+                            Streckenverlauf: {{ activeJourneyForMap()?.origin?.name }} ➔ {{ activeJourneyForMap()?.destination?.name }}
                           </span>
-                        } @else {
-                          <span class="text-[10px] font-bold text-[#1B4332] bg-[#EDF9F0] px-2 py-0.5 rounded-full border border-[#B7E4C7] hidden sm:inline-flex items-center gap-1">
-                            <span class="w-1.5 h-1.5 rounded-full bg-[#2D6A4F]" aria-hidden="true"></span>
-                            Pünktlich
-                          </span>
-                        }
-                      </div>
-
-                      <!-- Badges: Dynamic Sort, Duration, Transfers, Ticket -->
-                      <div class="flex items-center gap-1.5 flex-wrap">
-                        @if (dynamicBadge) {
-                          <span 
-                            class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-black text-[11px] border shadow-2xs shrink-0"
-                            [class.bg-[#EDF9F0]]="dynamicBadge.isTop"
-                            [class.text-[#1B4332]]="dynamicBadge.isTop"
-                            [class.border-[#B7E4C7]]="dynamicBadge.isTop"
-                            [class.bg-[#FAF7F2]]="!dynamicBadge.isTop"
-                            [class.text-[#5D4037]]="!dynamicBadge.isTop"
-                            [class.border-[#E6DED6]]="!dynamicBadge.isTop"
-                          >
-                            <span class="mat-icon text-[12px]" aria-hidden="true">{{ dynamicBadge.icon }}</span>
-                            <span>{{ dynamicBadge.label }}</span>
-                          </span>
-                        }
-
-                        <span class="inline-flex items-center gap-1 px-2.5 py-0.5 bg-[#FAF7F2] group-hover:bg-white text-[#1F1612] border border-[#E6DED6] rounded-full text-[11px] font-black shadow-2xs">
-                          <span class="mat-icon text-xs text-[#2D6A4F]" aria-hidden="true">schedule</span>
-                          <span>{{ journey.durationFormatted || formatDuration(journey.durationMinutes) }}</span>
-                        </span>
-
-                        <span
-                          class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold border shadow-2xs"
-                          [class]="comfort.badgeClass"
-                        >
-                          <span class="mat-icon text-xs" aria-hidden="true">{{ comfort.icon }}</span>
-                          <span>{{ comfort.shortLabel }}</span>
-                        </span>
-
-                        <span class="inline-flex items-center gap-1 px-2 py-0.5 bg-[#EDF9F0] text-[#1B4332] border border-[#B7E4C7] rounded-full text-[11px] font-bold shadow-2xs hidden sm:inline-flex">
-                          <span>✓ D-Ticket</span>
-                        </span>
-                      </div>
-                    </div>
-
-                    <!-- Linear Route Segment Visuals (Switch app style: ultra compact, zero excess padding) -->
-                    <div class="flex items-center overflow-x-auto no-scrollbar py-0.5 text-xs text-[#1F1612]" aria-label="Streckenabschnitte">
-                      
-                      <!-- 1. Walking from user location (Clickable to guide to station on map) - ONLY if journey started from current location -->
-                      @if (journey.isFromCurrentLocation) {
-                        <button
-                          type="button"
-                          id="btn-walk-guide-{{ journey.id || $index }}"
-                          (click)="onWalkGuideClick($event, journey)"
-                          class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-[#EDE5DC] hover:bg-[#D8F3DC] text-[#1B4332] font-black text-[10px] shrink-0 transition-colors border border-transparent hover:border-[#2D6A4F] cursor-pointer"
-                          title="Fußweg zur Station auf der Karte anzeigen"
-                          [attr.aria-label]="'Fußweg zur Station ' + (journey.walkToStartMinutes || 5) + ' Minuten auf Karte anzeigen'"
-                        >
-                          <span class="mat-icon text-[11px] text-[#2D6A4F]" aria-hidden="true">directions_walk</span>
-                          <span>{{ journey.walkToStartMinutes || 5 }}'</span>
-                        </button>
-
-                        <span class="text-[#B7A99A] text-[10px] font-bold shrink-0 mx-0.5" aria-hidden="true">›</span>
-                      }
-
-                      <!-- 2. Transit Legs and Transfers in linear chain (ultra-compact Switch badges) -->
-                      @for (leg of journey.legs; track $index) {
-                        <div class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-black shadow-2xs shrink-0" [class]="getLegBadgeClass(leg)">
-                          <span class="mat-icon text-[10px]" aria-hidden="true">{{ getLegVehicleIcon(leg) }}</span>
-                          <span>{{ leg.line?.name || 'Zug' }}</span>
-                          @if (leg.departurePlatform) {
-                            <span class="text-[8px] font-normal opacity-90 ml-0.5">Gl.{{ leg.departurePlatform }}</span>
+                          @if (activeJourneyForMap(); as activeJ) {
+                            <span class="text-[11px] font-bold text-[#2D6A4F] bg-[#EDF9F0] px-2 py-0.5 rounded-md border border-[#B7E4C7]">
+                              {{ formatTime(activeJ.departure) }} - {{ formatTime(activeJ.arrival) }}
+                            </span>
                           }
                         </div>
 
-                        @if ($index < journey.legs.length - 1) {
-                          <span class="text-[#B7A99A] text-[10px] font-bold shrink-0 mx-0.5" aria-hidden="true">›</span>
-                          
-                          <div class="inline-flex items-center gap-0.5 px-1 py-0.5 rounded bg-[#FFF3CD] text-[#856404] font-black text-[9px] shrink-0 border border-[#FFE082]" title="Umsteigezeit">
-                            <span class="mat-icon text-[9px]" aria-hidden="true">sync_alt</span>
-                            <span>{{ journey.transferDetails[$index]?.bufferMinutes || 8 }}'</span>
-                          </div>
-
-                          <span class="text-[#B7A99A] text-[10px] font-bold shrink-0 mx-0.5" aria-hidden="true">›</span>
-                        }
-                      }
-
-                      <span class="text-[#B7A99A] text-[10px] font-bold shrink-0 mx-0.5" aria-hidden="true">›</span>
-
-                      <!-- 3. Final Destination Pin -->
-                      <div class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-[#FAF7F2] text-[#1F1612] font-bold shrink-0 text-[10px]">
-                        <span class="mat-icon text-[10px] text-[#9A2218]" aria-hidden="true">place</span>
-                        <span class="truncate max-w-[120px] sm:max-w-[180px]">{{ journey.destination.name }}</span>
-                        <span class="text-[9px] text-[#795548] font-normal">({{ formatTime(journey.arrival) }})</span>
-                      </div>
-
-                    </div>
-
-                    <!-- Live Accessibility Status (Hamburg Urban Data & DB FaSta) -->
-                    @if (journey.accessibility) {
-                      @let acc = journey.accessibility;
-                      @let isAccExpanded = expandedAccessibilityJourneyId() === journey.id;
-                      <div class="pt-1.5 border-t border-[#F0EAE1] space-y-1.5">
-                        <div class="flex items-center justify-between gap-2 flex-wrap text-[11px]">
-                          <div class="flex items-center gap-1.5 flex-wrap">
-                            @if (acc.statusType === 'warning') {
-                              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-[#FFF3E0] text-[#E65100] border border-[#FFE0B2]" title="Aufzugsstörung auf dieser Fahrtstrecke gemeldet">
-                                <span class="mat-icon text-[11px]">warning</span>
-                                <span>{{ acc.badgeLabel }}</span>
-                              </span>
-                            } @else {
-                              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#EDF9F0] text-[#1B4332] border border-[#B7E4C7]" title="Stufenfreie Fahrtverbindung">
-                                <span class="mat-icon text-[11px] text-[#2D6A4F]">accessible</span>
-                                <span>{{ acc.badgeLabel }}</span>
-                              </span>
-                            }
-
-                            @if (acc.stationNotes && acc.stationNotes.length > 0) {
-                              @let disruptedNote = getFirstDisruptionNote(acc);
-                              @if (disruptedNote) {
-                                <span class="text-[10px] text-[#E65100] font-medium truncate max-w-[200px] sm:max-w-xs">
-                                  {{ disruptedNote }}
-                                </span>
-                              }
-                            }
-                          </div>
-
+                        <div class="flex items-center gap-1.5">
                           <button
                             type="button"
-                            (click)="toggleAccessibilityExpand(journey.id, $event)"
-                            class="inline-flex items-center gap-0.5 text-[10px] font-bold text-[#2D6A4F] hover:text-[#1B4332] bg-[#FAF7F2] hover:bg-[#EDF9F0] px-2 py-0.5 rounded-md border border-[#E6DED6] cursor-pointer transition-colors shadow-2xs"
-                            title="Stationen & Aufzüge auf dieser Verbindung prüfen"
-                            [attr.aria-expanded]="isAccExpanded"
+                            (click)="toggleMapExpandCollapse()"
+                            class="px-2.5 py-1 bg-[#FAF7F2] hover:bg-[#EDE5DC] text-[#4E342E] rounded-lg text-xs font-bold border border-[#E6DED6] cursor-pointer transition-colors flex items-center gap-1"
+                            [title]="isMapExpanded() ? 'Karte verkleinern' : 'Karte vergrößern'"
+                            aria-label="Kartenhöhe umschalten"
                           >
-                            <span class="mat-icon text-[11px]">elevator</span>
-                            <span>{{ isAccExpanded ? 'Aufzüge ausblenden' : 'Aufzüge & Barrierefreiheit' }}</span>
-                            <span class="mat-icon text-[10px] transition-transform" [class.rotate-180]="isAccExpanded">expand_more</span>
+                            <span class="mat-icon text-xs text-[#2D6A4F]" aria-hidden="true">{{ isMapExpanded() ? 'unfold_less' : 'unfold_more' }}</span>
+                            <span>{{ isMapExpanded() ? 'Kompakt' : 'Vergrößern' }}</span>
+                          </button>
+                          <button
+                            type="button"
+                            (click)="toggleInlineMapPreview()"
+                            class="px-2.5 py-1 bg-white hover:bg-[#FAF7F2] text-[#795548] rounded-lg text-xs font-bold border border-[#E6DED6] cursor-pointer transition-colors flex items-center gap-1"
+                            title="Karte schließen"
+                            aria-label="Karten-Vorschau schließen"
+                          >
+                            <span class="mat-icon text-xs" aria-hidden="true">close</span>
+                            <span>Schließen</span>
                           </button>
                         </div>
+                      </div>
 
-                        <!-- Expandable station-by-station didactic breakdown -->
-                        @if (isAccExpanded) {
-                          <div class="bg-[#FAF7F2] rounded-xl p-2.5 border border-[#E6DED6] text-xs space-y-1.5 animate-in fade-in duration-150">
-                            <div class="flex items-center justify-between text-[10px] font-bold text-[#795548] uppercase tracking-wider pb-1 border-b border-[#EDE5DC]">
-                              <span>Stationen & Aufzugssituation (Live)</span>
-                              <button
-                                type="button"
-                                (click)="openAccessibilityMonitor($event)"
-                                class="text-[#2D6A4F] hover:underline font-bold capitalize cursor-pointer flex items-center gap-0.5"
-                              >
-                                <span>Gesamter Monitor</span>
-                                <span class="mat-icon text-[10px]">open_in_new</span>
-                              </button>
+                      <div
+                        class="w-full rounded-xl overflow-hidden border border-[#E6DED6] transition-all duration-200"
+                        [class.h-56]="!isMapExpanded()"
+                        [class.sm:h-64]="!isMapExpanded()"
+                        [class.h-96]="isMapExpanded()"
+                        [class.sm:h-[420px]]="isMapExpanded()"
+                      >
+                        <app-map-view
+                          #inlineMapView
+                          [activeJourney]="activeJourneyForMap()"
+                          [selectedStation]="toStation()"
+                          [isFullBleed]="true"
+                        ></app-map-view>
+                      </div>
+                    </div>
+                  }
+
+                  <!-- Header Bar directly before Verbindungen: Verbindungen & Das Wetter side-by-side -->
+                  <div class="flex items-center justify-between gap-3 flex-wrap pt-1 pb-1">
+                    <!-- Left: Verbindungen Title -->
+                    <div class="flex items-center gap-2.5">
+                      <h2 class="text-xl sm:text-2xl font-black text-[#1F1612] tracking-tight flex items-center gap-2">
+                        <span>Verbindungen</span>
+                        <span class="text-xs sm:text-sm font-bold text-[#2D6A4F] bg-[#EDF9F0] border border-[#B7E4C7] px-2.5 py-0.5 rounded-full shadow-2xs">
+                          {{ sortedJourneys().length }}
+                        </span>
+                      </h2>
+                      @if (toStation()?.name) {
+                        <span class="hidden md:inline-block text-xs font-semibold text-[#795548] truncate max-w-xs">
+                          nach {{ toStation()?.name }}
+                        </span>
+                      }
+                    </div>
+
+                    <!-- Right: Das Wetter am Zielort -->
+                    @if (destinationWeather(); as weather) {
+                      <div class="flex items-center gap-1.5 shrink-0">
+                        <span class="text-xs font-bold text-[#795548] flex items-center gap-1">
+                          <span class="mat-icon text-xs text-[#2D6A4F]" aria-hidden="true">wb_sunny</span>
+                          <span class="hidden sm:inline">Wetter am Zielort:</span>
+                          <span class="sm:hidden">Zielort:</span>
+                        </span>
+                        <div
+                          id="minimalist-weather"
+                          class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-[#E6DED6] shadow-2xs text-xs font-medium text-[#1F1612]"
+                          title="Wetter am Zielort {{ weather.cityName }}: {{ weather.description }}"
+                        >
+                          <span class="text-base leading-none select-none" aria-hidden="true">{{ weather.icon }}</span>
+                          <span class="font-black text-[#1F1612]">{{ weather.temperature }}°C</span>
+                          <span class="text-[#795548] font-medium hidden sm:inline">{{ weather.description }}</span>
+                          @if (weather.precipitation > 0) {
+                            <span class="text-[#0284C7] font-semibold text-[11px] flex items-center gap-0.5" title="Niederschlag">
+                              <span class="mat-icon text-xs leading-none" aria-hidden="true">umbrella</span>
+                              <span>{{ weather.precipitation }} mm</span>
+                            </span>
+                          }
+                          <span class="text-[11px] text-[#2D6A4F] font-bold bg-[#EDF9F0] px-2 py-0.5 rounded-full border border-[#B7E4C7]">
+                            {{ weather.cityName }}
+                          </span>
+                        </div>
+                      </div>
+                    } @else if (isWeatherLoading()) {
+                      <div class="flex items-center gap-1.5 shrink-0">
+                        <span class="text-xs font-bold text-[#795548] flex items-center gap-1">
+                          <span class="mat-icon text-xs text-[#2D6A4F]" aria-hidden="true">wb_sunny</span>
+                          <span class="hidden sm:inline">Wetter am Zielort:</span>
+                          <span class="sm:hidden">Zielort:</span>
+                        </span>
+                        <div class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-[#E6DED6] shadow-2xs text-xs text-[#8D6E63] animate-pulse">
+                          <span class="mat-icon text-xs animate-spin text-[#2D6A4F]" aria-hidden="true">sync</span>
+                          <span>Wetter lädt…</span>
+                        </div>
+                      </div>
+                    }
+                  </div>
+
+                  <!-- Linear Connections List (HVV Switch Style) -->
+                  <div class="space-y-3.5" role="feed" aria-label="Gefundene Fahrtverbindungen">
+                    @for (journey of sortedJourneys(); track journey.id) {
+                      <div
+                        (click)="openJourneyDetail(journey)"
+                        (keydown.enter)="openJourneyDetail(journey)"
+                        (keydown.space)="openJourneyDetail(journey)"
+                        role="button"
+                        tabindex="0"
+                        class="group bg-white hover:bg-[#FAF7F2] rounded-2xl border transition-all duration-150 cursor-pointer shadow-xs hover:shadow-md relative outline-none focus-visible:ring-2 focus-visible:ring-[#2D6A4F] overflow-hidden"
+                        [class.border-[#2D6A4F]]="$index === 0"
+                        [class.border-[#E6DED6]]="$index !== 0"
+                        [attr.aria-label]="'Fahrt von ' + formatTime(journey.departure) + ' bis ' + formatTime(journey.arrival) + ' Uhr. Detalles anzeigen.'"
+                      >
+                        <div class="p-4 sm:p-5 space-y-2.5">
+                          <!-- 1. Empfehlung Badge -->
+                          @if ($index === 0) {
+                            <div>
+                              <span class="inline-block px-2.5 py-0.5 rounded-md text-xs font-semibold bg-[#EDF9F0] text-[#1B4332]">
+                                Unsere Empfehlung
+                              </span>
                             </div>
-                            <div class="space-y-1">
-                              @for (sn of acc.stationNotes; track sn.stationName) {
-                                <div class="flex items-start justify-between gap-1.5 text-[11px]">
-                                  <div class="flex items-center gap-1 min-w-0">
-                                    <span class="mat-icon text-xs" [class.text-[#E65100]]="sn.hasDisruption" [class.text-[#2D6A4F]]="!sn.hasDisruption">
-                                      {{ sn.hasDisruption ? 'warning' : 'check_circle' }}
+                          }
+
+                          <!-- 2. Header: Salida ➔ Llegada (live) & Duración -->
+                          <div class="flex items-baseline justify-between gap-3 flex-wrap">
+                            <div class="flex items-baseline gap-2 sm:gap-2.5">
+                              <span class="text-2xl sm:text-3xl font-black text-[#1F1612] tracking-tight">
+                                {{ formatTime(journey.departure) }}
+                              </span>
+                              <span class="text-base sm:text-xl font-black text-[#1F1612] select-none" aria-hidden="true">➔</span>
+                              <span class="text-2xl sm:text-3xl font-black text-[#1F1612] tracking-tight">
+                                {{ formatTime(journey.arrival) }}
+                              </span>
+                              <span class="mat-icon text-sm sm:text-base text-[#1F1612] leading-none align-middle ml-0.5" title="Echtzeitdaten aktiv" aria-hidden="true">sensors</span>
+                            </div>
+
+                            <div class="text-xl sm:text-2xl font-black text-[#1F1612] tracking-tight text-right shrink-0">
+                              {{ formatHvvDuration(journey.durationMinutes) }}
+                            </div>
+                          </div>
+
+                          <!-- 3. Subheader: ab Estación um Hora (live) -->
+                          @let firstDep = getFirstTransitDeparture(journey);
+                          <div class="text-xs sm:text-sm text-[#795548] font-medium flex items-center gap-1">
+                            <span>ab {{ firstDep.stationName }} um {{ firstDep.time }}</span>
+                            <span class="mat-icon text-xs text-[#795548] leading-none align-middle" aria-hidden="true">sensors</span>
+                          </div>
+
+                          <!-- 4. Route Badges: 🚶 28 min ➔ RB71 ➔ S3 ➔ U3 -->
+                          <div class="flex items-center gap-2 flex-wrap pt-0.5" aria-label="Fahrtverlauf">
+                            @for (seg of getDisplayRouteSegments(journey); track $index) {
+                              @if (seg.type === 'walk') {
+                                <div class="inline-flex items-center gap-1 text-xs sm:text-sm font-bold text-[#1F1612] shrink-0">
+                                  <span class="mat-icon text-base text-[#1F1612]" aria-hidden="true">directions_walk</span>
+                                  <span>{{ seg.durationMinutes }} min</span>
+                                </div>
+                              } @else {
+                                <div
+                                  class="inline-flex items-center justify-center px-2 py-0.5 text-xs font-black shadow-2xs shrink-0 relative select-none uppercase tracking-tight"
+                                  [class]="(seg.style?.bg || 'bg-[#1F1612]') + ' ' + (seg.style?.text || 'text-white') + ' ' + (seg.style?.shape || 'rounded')"
+                                >
+                                  <span>{{ seg.lineName }}</span>
+                                  @if (seg.hasAlert) {
+                                    <span class="absolute -top-1.5 -right-1.5 bg-white text-[#0284C7] rounded-full p-0.5 shadow-2xs leading-none flex items-center justify-center" aria-hidden="true">
+                                      <span class="mat-icon text-[10px] leading-none font-black">warning</span>
                                     </span>
-                                    <span class="font-bold text-[#1F1612] truncate">{{ sn.stationName }}:</span>
-                                    <span class="text-[#795548] truncate">{{ sn.note }}</span>
-                                  </div>
+                                  }
                                 </div>
                               }
+
+                              @if ($index < getDisplayRouteSegments(journey).length - 1) {
+                                <span class="text-xs sm:text-sm font-black text-[#1F1612] shrink-0 select-none" aria-hidden="true">➔</span>
+                              }
+                            }
+                          </div>
+
+                          <!-- 5. Ticket Divider & Line with direct 'Auf Karte' action -->
+                          <div class="pt-3 border-t border-[#EDE5DC] flex items-center justify-between text-xs font-semibold gap-2 flex-wrap">
+                            <div class="flex items-center gap-1.5 text-[#1B4332]">
+                              <span class="mat-icon text-sm text-[#2D6A4F]" aria-hidden="true">confirmation_number</span>
+                              <span>Tickets ab 0,00 € • 100% D-Ticket gültig</span>
                             </div>
+                            <div class="flex items-center gap-2">
+                              <button
+                                type="button"
+                                (click)="showJourneyInMapFocus(journey, $event)"
+                                class="px-2.5 py-1 rounded-lg bg-[#FAF7F2] hover:bg-[#EDF9F0] text-[#1B4332] border border-[#D7CCC8] hover:border-[#B7E4C7] text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                                title="Diese Verbindung auf der Karte visualisieren"
+                                aria-label="Route auf der Karte anzeigen"
+                              >
+                                <span class="mat-icon text-xs text-[#2D6A4F]">map</span>
+                                <span>Auf Karte</span>
+                              </button>
+                              <div class="flex items-center gap-1 text-[#795548] group-hover:text-[#1B4332] transition-colors font-bold">
+                                <span>Detalles</span>
+                                <span class="mat-icon text-xs">arrow_forward</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <!-- 6. Bottom Alert Banner (si hay avisos o retrasos) -->
+                        @if (hasJourneyAlerts(journey)) {
+                          <div class="bg-[#EEF3F8] text-[#1F1612] px-4 py-2.5 border-t border-[#DDE5ED] flex items-center gap-2 text-xs font-semibold">
+                            <span class="mat-icon text-sm text-[#0284C7] shrink-0" aria-hidden="true">warning</span>
+                            <span class="truncate">{{ getJourneyAlertText(journey) }}</span>
                           </div>
                         }
                       </div>
                     }
-
-                    <!-- Bottom Recommendation & Trigger Action for details -->
-                    <div class="flex items-center justify-between text-[11px] pt-1 text-[#795548] border-t border-[#F5EFE6]">
-                      <div class="flex items-center gap-1 font-medium truncate">
-                        <span class="mat-icon text-xs text-[#2D6A4F]" aria-hidden="true">schedule</span>
-                        @if (journey.isFromCurrentLocation) {
-                          <span>
-                            Um <strong>{{ getLeaveRecommendation(journey) }} Uhr losgehen</strong> für {{ formatTime(journey.departure) }} Uhr Abfahrt
-                          </span>
-                        } @else {
-                          <span>
-                            Abfahrt um <strong>{{ formatTime(journey.departure) }} Uhr</strong> ab {{ journey.origin.name }}
-                          </span>
-                        }
-                      </div>
-
-                      <div class="inline-flex items-center gap-1 font-bold text-[#1B4332] group-hover:text-[#2D6A4F] group-hover:translate-x-0.5 transition-transform shrink-0">
-                        <span>Details & Haltestellen</span>
-                        <span class="mat-icon text-xs" aria-hidden="true">arrow_forward</span>
-                      </div>
-                    </div>
-
                   </div>
-                }
-              </div>
 
-              <!-- Pagination / Browse earlier & later connections -->
-              <div class="flex items-center justify-between gap-2 pt-1 flex-wrap">
-                <button
-                  type="button"
-                  id="btn-earlier-page"
-                  (click)="shiftTimeBy(-1)"
-                  class="px-3 py-1.5 rounded-xl bg-white hover:bg-[#FAF7F2] text-[#4E342E] border border-[#E6DED6] text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-2xs transition-colors"
-                  aria-label="Frühere Verbindungen 1 Stunde vorher anzeigen"
-                >
-                  <span class="mat-icon text-sm" aria-hidden="true">arrow_back</span>
-                  <span>Frühere (-1 Std.)</span>
-                </button>
+                  <!-- Pagination / Browse earlier & later connections -->
+                  <div class="flex items-center justify-between gap-2 pt-1 flex-wrap">
+                    <button
+                      type="button"
+                      id="btn-earlier-page"
+                      (click)="shiftTimeBy(-1)"
+                      class="px-3 py-1.5 rounded-xl bg-white hover:bg-[#FAF7F2] text-[#4E342E] border border-[#E6DED6] text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-2xs transition-colors"
+                      aria-label="Frühere Verbindungen 1 Stunde vorher anzeigen"
+                    >
+                      <span class="mat-icon text-sm" aria-hidden="true">arrow_back</span>
+                      <span>Frühere (-1 Std.)</span>
+                    </button>
 
-                <button
-                  type="button"
-                  id="btn-later-page"
-                  (click)="shiftTimeBy(1)"
-                  class="px-3 py-1.5 rounded-xl bg-white hover:bg-[#FAF7F2] text-[#1B4332] border border-[#B7E4C7] text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-2xs transition-colors"
-                  aria-label="Spätere Verbindungen 1 Stunde nachher anzeigen"
-                >
-                  <span>Spätere Verbindungen (+1 Std.)</span>
-                  <span class="mat-icon text-sm text-[#2D6A4F]" aria-hidden="true">arrow_forward</span>
-                </button>
-              </div>
+                    <button
+                      type="button"
+                      id="btn-later-page"
+                      (click)="shiftTimeBy(1)"
+                      class="px-3 py-1.5 rounded-xl bg-white hover:bg-[#FAF7F2] text-[#1B4332] border border-[#B7E4C7] text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-2xs transition-colors"
+                      aria-label="Spätere Verbindungen 1 Stunde nachher anzeigen"
+                    >
+                      <span>Spätere Verbindungen (+1 Std.)</span>
+                      <span class="mat-icon text-sm text-[#2D6A4F]" aria-hidden="true">arrow_forward</span>
+                    </button>
+                  </div>
+
+                </div>
+              }
             } @else {
               <!-- Empty State / No Connections Error -->
               <div class="bg-[#F5EFE6] rounded-2xl p-6 border border-[#E6DED6] text-center space-y-3" role="alert">
@@ -1731,10 +1814,106 @@ interface CuratedDestination {
         </div>
       }
 
+      <!-- GPS Aktivierungs- und Hilfe-Modal -->
+      @if (showGpsPromptModal()) {
+        <div
+          class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="gps-modal-title"
+        >
+          <div
+            class="bg-white rounded-2xl max-w-md w-full p-5 sm:p-6 shadow-2xl border border-[#E6DED6] animate-in zoom-in-95 duration-200 space-y-4"
+          >
+            <!-- Header with Icon -->
+            <div class="flex items-start justify-between gap-3">
+              <div class="flex items-center gap-3">
+                <div class="w-11 h-11 rounded-xl bg-[#FFFBEB] border border-[#FDE68A] text-[#D97706] flex items-center justify-center shrink-0 shadow-2xs">
+                  <span class="mat-icon text-2xl">location_disabled</span>
+                </div>
+                <div>
+                  <h3 id="gps-modal-title" class="text-base font-bold text-[#1F1612]">
+                    GPS / Standort aktivieren
+                  </h3>
+                  <p class="text-xs text-[#795548]">
+                    Für die genaue Ermittlung deiner aktuellen Position
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                id="btn-close-gps-modal"
+                (click)="closeGpsModal()"
+                class="w-8 h-8 rounded-lg flex items-center justify-center text-[#8D6E63] hover:text-[#1F1612] hover:bg-[#FAF7F2] cursor-pointer"
+                aria-label="Schließen"
+              >
+                <span class="mat-icon text-lg">close</span>
+              </button>
+            </div>
+
+            <!-- Description / Instructions -->
+            <div class="space-y-2.5 text-xs text-[#5D4037] bg-[#FAF7F2] p-3.5 rounded-xl border border-[#E6DED6]">
+              @if (gpsPromptErrorCode() === 1) {
+                <p class="font-bold text-[#B45309] flex items-center gap-1.5">
+                  <span class="mat-icon text-base">lock</span>
+                  <span>Standortzugriff im Browser blockiert</span>
+                </p>
+                <ol class="list-decimal list-inside space-y-1.5 pl-1 text-[11px] text-[#795548]">
+                  <li>Klicke oben links in der Browser-Adressleiste auf das <strong>Schlosssymbol 🔒</strong> oder <strong>Website-Einstellungen</strong>.</li>
+                  <li>Setze die Berechtigung für <strong>Standort</strong> auf <strong>Zulassen</strong>.</li>
+                  <li>Klicke danach auf den Button <strong>GPS erneut abfragen</strong>.</li>
+                </ol>
+              } @else if (gpsPromptErrorCode() === 2) {
+                <p class="font-bold text-[#B45309] flex items-center gap-1.5">
+                  <span class="mat-icon text-base">near_me_disabled</span>
+                  <span>Standortdienst (GPS) auf Gerät ausgeschaltet</span>
+                </p>
+                <ol class="list-decimal list-inside space-y-1.5 pl-1 text-[11px] text-[#795548]">
+                  <li>Öffne das Kontrollzentrum / Schnelleinstellungen deines Handys oder PCs.</li>
+                  <li>Aktiviere den Schalter <strong>Standort / GPS</strong>.</li>
+                  <li>Tippe anschließend auf <strong>GPS erneut abfragen</strong>.</li>
+                </ol>
+              } @else {
+                <p class="font-medium text-[#1F1612]">
+                  {{ gpsPromptMessage() || 'Das GPS-Signal konnte nicht ermittelt werden. Bitte prüfe, ob dein Standortdienst aktiv ist.' }}
+                </p>
+              }
+            </div>
+
+            <!-- Action buttons -->
+            <div class="flex flex-col sm:flex-row gap-2 pt-1">
+              <button
+                type="button"
+                id="btn-retry-gps"
+                (click)="retryGpsActivation()"
+                class="flex-1 py-2.5 px-4 bg-[#1B4332] hover:bg-[#132A1E] text-white font-bold text-xs rounded-xl shadow-xs hover:shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+              >
+                @if (standortActionState() === 'locating') {
+                  <span class="mat-icon text-sm animate-spin">sync</span>
+                  <span>GPS wird abgefragt...</span>
+                } @else {
+                  <span class="mat-icon text-sm">my_location</span>
+                  <span>GPS erneut abfragen</span>
+                }
+              </button>
+
+              <button
+                type="button"
+                id="btn-use-fallback-location"
+                (click)="useFallbackLocationAndContinue()"
+                class="py-2.5 px-3.5 bg-white hover:bg-[#FAF7F2] text-[#5D4037] hover:text-[#1F1612] font-semibold text-xs rounded-xl border border-[#D7CCC8] hover:border-[#1B4332] transition-colors cursor-pointer text-center"
+              >
+                Mit Hamburg fortfahren
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+
     </div>
   `
 })
-export class PlannerView implements OnInit {
+export class PlannerView implements OnInit, AfterViewInit {
   @Output() showOnMap = new EventEmitter<ConnectionJourney>();
   @Output() showStationOnMap = new EventEmitter<Station>();
   @Output() viewDetail = new EventEmitter<ConnectionJourney>();
@@ -1742,9 +1921,20 @@ export class PlannerView implements OnInit {
 
   private fb = inject(FormBuilder);
   readonly transitService = inject(TransitService);
+  readonly weatherService = inject(WeatherService);
+
+  readonly destinationWeather = this.weatherService.currentWeather;
+  readonly isWeatherLoading = this.weatherService.isLoading;
 
   readonly activeInput = signal<'from' | 'to'>('to');
   readonly showStandortMap = signal<boolean>(false);
+
+  // Standort action state and interactive feedback
+  readonly standortActionState = signal<'idle' | 'locating' | 'success' | 'gps-warning'>('idle');
+  readonly standortFeedbackMessage = signal<string | null>(null);
+  readonly showGpsPromptModal = signal<boolean>(false);
+  readonly gpsPromptMessage = signal<string>('');
+  readonly gpsPromptErrorCode = signal<number | null>(null);
 
   readonly expandedAccessibilityJourneyId = signal<string | null>(null);
 
@@ -1767,6 +1957,22 @@ export class PlannerView implements OnInit {
   readonly journeys = signal<ConnectionJourney[]>([]);
   readonly isLoading = signal<boolean>(false);
   readonly hasSearched = signal<boolean>(false);
+
+  // Travel results view modes & map expansion state
+  @ViewChild('resultsMapView') resultsMapView?: MapView;
+  @ViewChild('inlineMapView') inlineMapView?: MapView;
+  readonly resultsViewMode = signal<'list' | 'map'>('list');
+  readonly isMapExpanded = signal<boolean>(false);
+  readonly showInlineMapPreview = signal<boolean>(false);
+  readonly selectedMapJourney = signal<ConnectionJourney | null>(null);
+
+  readonly activeJourneyForMap = computed(() => {
+    const selected = this.selectedMapJourney();
+    if (selected) return selected;
+    const sorted = this.sortedJourneys();
+    return sorted.length > 0 ? sorted[0] : null;
+  });
+
   readonly showSearchOptions = signal<boolean>(false);
   readonly expandedJourneyId = signal<string | null>(null);
   readonly expandedLegKeys = signal<Record<string, boolean>>({});
@@ -1776,6 +1982,8 @@ export class PlannerView implements OnInit {
   readonly errorMessage = signal<string>('');
   readonly sortBy = signal<'fastest' | 'fewest-transfers' | 'departure'>('fastest');
   readonly showSortOptions = signal<boolean>(false);
+  readonly showVerbindungenHeader = signal<boolean>(false);
+  readonly showWeather = signal<boolean>(false);
   readonly discoveryCategory = signal<'all' | 'kueste' | 'natur' | 'kultur'>('all');
   readonly selectedStartingHub = signal<string>('Hamburg');
   readonly showAllPopularDestinations = signal<boolean>(false);
@@ -2172,31 +2380,41 @@ export class PlannerView implements OnInit {
 
   readonly currentStreetAndNumber = computed<string>(() => {
     const streetNum = this.transitService.userStreetNumber();
-    if (streetNum && streetNum !== 'Aktueller Standort' && streetNum !== 'Hamburg Hbf') {
+    if (streetNum && streetNum !== 'Aktueller Standort' && streetNum !== 'Hamburg Hbf' && !streetNum.includes('Mönckebergstraße')) {
       const firstPart = streetNum.split(',')[0].trim();
       return firstPart.replace(/\b\d{5}\b.*$/, '').trim();
     }
     const addr = this.transitService.userAddress();
-    if (addr && addr !== 'Aktueller Standort') {
+    if (addr && addr !== 'Aktueller Standort' && !addr.includes('Mönckebergstraße')) {
       const parts = addr.split(',');
       if (parts.length > 0 && parts[0].trim()) {
         const firstPart = parts[0].trim();
         return firstPart.replace(/\b\d{5}\b.*$/, '').trim();
       }
     }
-    return 'Mönckebergstraße 7';
+    const loc = this.transitService.userLocation();
+    if (this.transitService.isRealGpsAcquired() && loc) {
+      const nearest = this.transitService.findNearestStationToCoordinates(loc.latitude, loc.longitude);
+      return nearest ? `Nähe ${nearest.name}` : 'Aktueller Standort';
+    }
+    return 'Aktueller Standort';
   });
 
   readonly currentFullAddress = computed<string>(() => {
     const addr = this.transitService.userAddress();
-    if (addr && addr !== 'Aktueller Standort' && addr !== 'Hamburg Hbf') {
+    if (addr && addr !== 'Aktueller Standort' && addr !== 'Hamburg Hbf' && !addr.includes('Mönckebergstraße')) {
       return addr;
     }
     const streetNum = this.transitService.userStreetNumber();
-    if (streetNum && streetNum !== 'Aktueller Standort' && streetNum !== 'Hamburg Hbf') {
-      return streetNum.includes('Hamburg') ? streetNum : `${streetNum}, 20095 Hamburg`;
+    if (streetNum && streetNum !== 'Aktueller Standort' && streetNum !== 'Hamburg Hbf' && !streetNum.includes('Mönckebergstraße')) {
+      return streetNum;
     }
-    return 'Mönckebergstraße 7, 20095 Hamburg';
+    const loc = this.transitService.userLocation();
+    if (this.transitService.isRealGpsAcquired() && loc) {
+      const nearest = this.transitService.findNearestStationToCoordinates(loc.latitude, loc.longitude);
+      return nearest ? `Nähe ${nearest.name}${nearest.address ? ', ' + nearest.address : ''}` : 'Aktueller Standort';
+    }
+    return 'Aktueller Standort';
   });
 
   readonly standortMapStation = computed<Station>(() => {
@@ -2310,64 +2528,208 @@ export class PlannerView implements OnInit {
       this.fromStation.set(station);
       this.fromStationQuery.set(station.name);
       this.transitService.recordRecentStation(station);
-      this.activeInput.set('to');
-      if (typeof document !== 'undefined') {
-        setTimeout(() => {
-          const el = document.getElementById('input-to-station') as HTMLInputElement;
-          if (el) {
-            el.focus();
-          }
-        }, 40);
-      }
+      this.checkAndTriggerAutoSearch('from');
     } else {
       this.toStation.set(station);
       this.toStationQuery.set(station.name);
       this.transitService.recordRecentStation(station);
-      if (typeof document !== 'undefined') {
-        setTimeout(() => {
-          const el = document.getElementById('input-to-station') as HTMLInputElement;
-          if (el) {
-            el.focus();
-          }
-        }, 40);
-      }
+      this.checkAndTriggerAutoSearch('to');
     }
+  }
+
+  constructor() {
+    effect(() => {
+      const list = this.journeys();
+      const to = this.toStation();
+      if (list.length > 0) {
+        const target = to || list[0]?.destination;
+        if (target) {
+          this.weatherService.getWeatherForStation(target);
+        }
+      }
+    });
   }
 
   ngOnInit() {
     this.transitService.startActiveTracking();
+    this.syncStandortOrigin();
   }
 
-  async applyStandortToOrigin() {
-    this.transitService.startActiveTracking();
-    let loc = this.transitService.userLocation();
+  ngAfterViewInit() {
+    this.focusDestinationInput();
+  }
 
-    // If there is no acquired position yet, actively search/request geolocation
-    if (!loc || !this.transitService.isRealGpsAcquired()) {
-      try {
-        loc = await this.transitService.requestGeolocation(true);
-      } catch (err) {
-        console.warn('Fehler bei der Standortermittlung:', err);
+  focusOriginInput() {
+    this.activeInput.set('from');
+    if (typeof document !== 'undefined') {
+      setTimeout(() => {
+        const el = document.getElementById('input-from-station') as HTMLInputElement;
+        if (el) {
+          el.focus();
+          this.activeInput.set('from');
+        }
+      }, 60);
+    }
+  }
+
+  focusDestinationInput() {
+    this.activeInput.set('to');
+    if (typeof document !== 'undefined') {
+      setTimeout(() => {
+        const el = document.getElementById('input-to-station') as HTMLInputElement;
+        if (el) {
+          el.focus();
+          this.activeInput.set('to');
+        }
+      }, 60);
+    }
+  }
+
+  /**
+   * Automatische Suche und intelligenter Fokus-Wechsel:
+   * - Wenn das Ziel (Destino) eingegeben/ausgewählt wurde:
+   *     - Falls Startbahnhof vorhanden ist: Sofort Verbindungssuche starten!
+   *     - Falls Startbahnhof leer ist: Fokus sofort auf den Startbahnhof (Origen) legen.
+   * - Sobald der Startbahnhof eingegeben wurde:
+   *     - Prüfen, ob das Ziel bereits feststeht: Wenn ja, sofort suchen!
+   *     - Falls kein Ziel vorhanden: Fokus auf das Ziel legen.
+   */
+  checkAndTriggerAutoSearch(triggerSource: 'from' | 'to') {
+    const from = this.fromStation();
+    const fromQ = this.fromStationQuery().trim();
+    const to = this.toStation();
+    const toQ = this.toStationQuery().trim();
+
+    const hasFrom = !!((from && (from.name || from.isCurrentLocation)) || (fromQ && fromQ !== ''));
+    const hasTo = !!((to && to.name) || (toQ && toQ !== ''));
+
+    if (triggerSource === 'to') {
+      if (hasTo && hasFrom) {
+        // Ziel erkannt und Start ist vorhanden -> Sofort suchen!
+        setTimeout(() => this.onSearchSubmit(), 80);
+      } else if (hasTo && !hasFrom) {
+        // Ziel erkannt, aber Start ist leer -> Fokus sofort auf Start!
+        this.focusOriginInput();
+      }
+    } else if (triggerSource === 'from') {
+      if (hasFrom && hasTo) {
+        // Start eingegeben und Ziel bereits vorhanden -> Sofort suchen!
+        setTimeout(() => this.onSearchSubmit(), 80);
+      } else if (hasFrom && !hasTo) {
+        // Start eingegeben, aber Ziel noch leer -> Fokus auf Ziel!
+        this.focusDestinationInput();
       }
     }
+  }
 
-    if (loc) {
-      try {
-        await this.transitService.fetchReverseGeocode(loc.latitude, loc.longitude);
-      } catch {
-        // Handled in transitService
-      }
-    }
-
-    const streetAndNumber = this.currentStreetAndNumber();
-
+  private async syncStandortOrigin() {
+    const loc = this.transitService.userLocation();
+    const currentStreet = this.currentStreetAndNumber();
     this.fromStation.set({
       id: 'current-location',
-      name: streetAndNumber,
+      name: currentStreet,
       isCurrentLocation: true,
       location: loc || undefined
     });
-    this.fromStationQuery.set(streetAndNumber);
+    this.fromStationQuery.set(currentStreet);
+
+    if (!this.transitService.isRealGpsAcquired()) {
+      try {
+        const res = await this.transitService.requestDetailedGeolocation(false);
+        if (res.success && res.coords && this.fromStation()?.isCurrentLocation) {
+          const streetAndNumber = res.userStreetNumber || this.currentStreetAndNumber() || 'Aktueller Standort';
+          this.fromStation.set({
+            id: 'current-location',
+            name: streetAndNumber,
+            isCurrentLocation: true,
+            location: res.coords
+          });
+          this.fromStationQuery.set(streetAndNumber);
+        }
+      } catch {
+        // Handled silently
+      }
+    }
+  }
+
+  async applyStandortToOrigin(forceRetry = true) {
+    this.standortActionState.set('locating');
+    this.standortFeedbackMessage.set('Aktuelle GPS-Position wird abgefragt...');
+    this.transitService.startActiveTracking();
+
+    try {
+      // Erzwingt eine frische GPS-Abfrage des Geräts / Browsers
+      const res = await this.transitService.requestDetailedGeolocation(forceRetry);
+      if (res.success && res.coords) {
+        this.standortActionState.set('success');
+        let streetAndNumber = res.userStreetNumber || this.currentStreetAndNumber();
+        if (!streetAndNumber || streetAndNumber === 'Aktueller Standort' || streetAndNumber.startsWith('Standort (')) {
+          const nearest = this.transitService.findNearestStationToCoordinates(res.coords.latitude, res.coords.longitude);
+          streetAndNumber = nearest ? nearest.name : 'Aktueller Standort';
+        }
+
+        this.fromStation.set({
+          id: 'current-location',
+          name: streetAndNumber,
+          isCurrentLocation: true,
+          location: res.coords
+        });
+        this.fromStationQuery.set(streetAndNumber);
+        this.standortFeedbackMessage.set(`Standort „${streetAndNumber}“ als Start übernommen!`);
+        this.showGpsPromptModal.set(false);
+
+        // Automatische Weiterleitung: Wenn Ziel schon da ist -> sofort suchen, sonst Cursor ins Ziel
+        this.checkAndTriggerAutoSearch('from');
+
+        setTimeout(() => {
+          if (this.standortActionState() === 'success') {
+            this.standortActionState.set('idle');
+            this.standortFeedbackMessage.set(null);
+          }
+        }, 4000);
+      } else {
+        // Geolocation denied, GPS disabled, or timeout -> Prompt to enable GPS
+        this.standortActionState.set('gps-warning');
+        this.gpsPromptErrorCode.set(res.errorCode ?? null);
+        this.gpsPromptMessage.set(res.errorMessage || 'Standortdienst (GPS) ist nicht aktiv. Bitte aktiviere dein GPS.');
+        this.standortFeedbackMessage.set(res.errorMessage || 'GPS nicht aktiv. Bitte Standortdienst aktivieren.');
+        this.showGpsPromptModal.set(true);
+      }
+    } catch (err) {
+      console.warn('Fehler bei der Standortermittlung:', err);
+      this.standortActionState.set('gps-warning');
+      this.gpsPromptMessage.set('Standort konnte nicht ermittelt werden. Bitte prüfe dein GPS.');
+      this.standortFeedbackMessage.set('GPS-Fehler. Bitte Standortdienst prüfen.');
+      this.showGpsPromptModal.set(true);
+    }
+  }
+
+  openGpsHelpModal() {
+    this.showGpsPromptModal.set(true);
+  }
+
+  closeGpsModal() {
+    this.showGpsPromptModal.set(false);
+  }
+
+  async retryGpsActivation() {
+    await this.applyStandortToOrigin(true);
+  }
+
+  useFallbackLocationAndContinue() {
+    const fallbackLoc = { latitude: 53.552736, longitude: 10.006909 };
+    const street = 'Hamburg Hbf (Standort)';
+    this.fromStation.set({
+      id: '8002549',
+      name: street,
+      isCurrentLocation: false,
+      location: fallbackLoc
+    });
+    this.fromStationQuery.set(street);
+    this.standortActionState.set('idle');
+    this.standortFeedbackMessage.set(null);
+    this.showGpsPromptModal.set(false);
+    this.checkAndTriggerAutoSearch('from');
   }
 
   openStandortMap() {
@@ -2416,7 +2778,8 @@ export class PlannerView implements OnInit {
       name: dest.name,
       location: { latitude: dest.lat, longitude: dest.lon }
     });
-    this.onSearchSubmit();
+    this.toStationQuery.set(dest.name);
+    this.checkAndTriggerAutoSearch('to');
   }
 
   onDropdownDestinationChange(destId: string) {
@@ -2536,6 +2899,10 @@ export class PlannerView implements OnInit {
   }
 
   applyDatePicker() {
+    this.searchForm.patchValue({
+      date: this.selectedDate(),
+      time: this.selectedTime()
+    });
     this.closeDatePickerPopup();
   }
 
@@ -2558,6 +2925,7 @@ export class PlannerView implements OnInit {
     const val = (event.target as HTMLInputElement)?.value;
     if (val) {
       this.selectedTime.set(val);
+      this.searchForm.patchValue({ time: val });
     }
   }
 
@@ -2643,6 +3011,7 @@ export class PlannerView implements OnInit {
     this.fromStation.set(station);
     if (station) {
       this.fromStationQuery.set(station.name);
+      this.checkAndTriggerAutoSearch('from');
     } else {
       this.fromStationQuery.set('');
     }
@@ -2652,6 +3021,7 @@ export class PlannerView implements OnInit {
     this.toStation.set(station);
     if (station) {
       this.toStationQuery.set(station.name);
+      this.checkAndTriggerAutoSearch('to');
     } else {
       this.toStationQuery.set('');
     }
@@ -2659,16 +3029,38 @@ export class PlannerView implements OnInit {
 
   async onSearchSubmit() {
     let from = this.fromStation();
-    const to = this.toStation();
+    let to = this.toStation();
 
-    // If 'from' has not been explicitly chosen (still placeholder 'Aktueller Standort'),
-    // automatically activate current location!
+    // Fallback if queries exist in input boxes but station object wasn't set yet
+    if (!from && this.fromStationQuery().trim()) {
+      const q = this.fromStationQuery().trim();
+      const match = ALL_GERMAN_STATIONS.find(s => s.name.toLowerCase() === q.toLowerCase());
+      from = match || { id: 'custom-from', name: q };
+      this.fromStation.set(from);
+    }
+
+    if (!to && this.toStationQuery().trim()) {
+      const q = this.toStationQuery().trim();
+      const match = ALL_GERMAN_STATIONS.find(s => s.name.toLowerCase() === q.toLowerCase());
+      to = match || { id: 'custom-to', name: q };
+      this.toStation.set(to);
+    }
+
+    // If 'from' has not been explicitly chosen, automatically activate current location!
     if (!from) {
       await this.applyStandortToOrigin();
       from = this.fromStation();
     }
 
-    if (!from || !to) return;
+    if (!to) {
+      this.focusDestinationInput();
+      return;
+    }
+
+    if (!from) {
+      this.focusOriginInput();
+      return;
+    }
 
     this.isLoading.set(true);
     this.errorMessage.set('');
@@ -2680,7 +3072,9 @@ export class PlannerView implements OnInit {
     const isFromCurrentLocation = !!(
       from.isCurrentLocation ||
       from.id === 'current-location' ||
-      from.name.toLowerCase().includes('aktueller standort')
+      from.name.toLowerCase().includes('aktueller standort') ||
+      from.name.toLowerCase().includes('mein standort') ||
+      from.name.toLowerCase().includes('standort')
     );
 
     let fromQuery = from.name;
@@ -2709,6 +3103,9 @@ export class PlannerView implements OnInit {
     this.isLoading.set(false);
     this.hasSearched.set(true);
     this.journeys.set(res.journeys);
+    if (res.journeys.length > 0) {
+      this.selectedMapJourney.set(res.journeys[0]);
+    }
 
     // Intelligently save searched stations to recent searches
     this.transitService.recordRecentStation(to);
@@ -2734,8 +3131,87 @@ export class PlannerView implements OnInit {
     this.hasSearched.set(false);
     this.isLoading.set(false);
     this.journeys.set([]);
+    this.selectedMapJourney.set(null);
+    this.showInlineMapPreview.set(false);
+    this.isMapExpanded.set(false);
+    this.resultsViewMode.set('list');
     this.errorMessage.set('');
     this.transitService.hasPlannerResults.set(false);
+    this.weatherService.currentWeather.set(null);
+    this.showVerbindungenHeader.set(false);
+    this.showWeather.set(false);
+    this.focusDestinationInput();
+  }
+
+  setResultsViewMode(mode: 'list' | 'map'): void {
+    this.resultsViewMode.set(mode);
+    if (mode === 'map' && !this.selectedMapJourney() && this.sortedJourneys().length > 0) {
+      this.selectedMapJourney.set(this.sortedJourneys()[0]);
+    }
+    setTimeout(() => {
+      this.resultsMapView?.invalidateSize();
+      this.inlineMapView?.invalidateSize();
+    }, 150);
+  }
+
+  toggleMapExpandCollapse(): void {
+    const cur = this.isMapExpanded();
+    this.isMapExpanded.set(!cur);
+    if (!cur && this.resultsViewMode() === 'list') {
+      this.showInlineMapPreview.set(true);
+    }
+    setTimeout(() => {
+      this.resultsMapView?.invalidateSize();
+      this.inlineMapView?.invalidateSize();
+    }, 150);
+  }
+
+  toggleInlineMapPreview(): void {
+    const next = !this.showInlineMapPreview();
+    this.showInlineMapPreview.set(next);
+    if (!next) {
+      this.isMapExpanded.set(false);
+    }
+    setTimeout(() => {
+      this.inlineMapView?.invalidateSize();
+    }, 150);
+  }
+
+  selectJourneyForMap(journey: ConnectionJourney, event?: Event): void {
+    if (event) {
+      event.stopPropagation();
+    }
+    this.selectedMapJourney.set(journey);
+    setTimeout(() => {
+      this.resultsMapView?.invalidateSize();
+      this.inlineMapView?.invalidateSize();
+    }, 100);
+  }
+
+  showJourneyInMapFocus(journey: ConnectionJourney, event?: Event): void {
+    if (event) {
+      event.stopPropagation();
+    }
+    this.selectedMapJourney.set(journey);
+    this.resultsViewMode.set('map');
+    setTimeout(() => {
+      this.resultsMapView?.invalidateSize();
+    }, 150);
+  }
+
+  getMapToggleTooltip(): string {
+    if (this.resultsViewMode() === 'map') {
+      return this.isMapExpanded() ? 'Kartenhöhe auf Standard verkleinern' : 'Kartenhöhe auf Vollansicht vergrößern';
+    }
+    return this.isMapExpanded() ? 'Kartenansicht einklappen' : 'Karte vergrößern & einblenden';
+  }
+
+  toggleVerbindungenHeader() {
+    this.showVerbindungenHeader.set(!this.showVerbindungenHeader());
+  }
+
+  toggleWeather() {
+    this.showWeather.set(!this.showWeather());
   }
 
   setSortCriteria(criteria: 'fastest' | 'fewest-transfers' | 'departure') {
@@ -3080,6 +3556,7 @@ export class PlannerView implements OnInit {
   }
 
   getLegVehicleIcon(leg: TransitLeg): string {
+    if (leg.walking) return 'directions_walk';
     const name = leg.line?.name || '';
     const mode = (leg.line?.mode || '').toLowerCase();
     const product = (leg.line?.product || '').toLowerCase();
@@ -3093,6 +3570,7 @@ export class PlannerView implements OnInit {
   }
 
   getLegBadgeClass(leg: TransitLeg): string {
+    if (leg.walking) return 'bg-[#F5EFE6] text-[#4E342E] border-[#E6DED6]';
     const name = leg.line?.name || '';
     if (name.startsWith('RE')) return 'bg-[#1B4332] text-white border-[#2D6A4F]';
     if (name.startsWith('RB')) return 'bg-[#4E342E] text-white border-[#5D4037]';
@@ -3101,6 +3579,126 @@ export class PlannerView implements OnInit {
     if (name.startsWith('ICE') || name.startsWith('IC')) return 'bg-[#C8372D] text-white border-[#B91C1C]';
     if (name.startsWith('Bus')) return 'bg-[#7C3AED] text-white border-[#6D28D9]';
     return 'bg-[#3E2723] text-white border-[#4E342E]';
+  }
+
+  formatHvvDuration(minutes: number): string {
+    if (!minutes || minutes <= 0) return '0 min';
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    if (h === 0) return `${m} min`;
+    if (m === 0) return `${h} h`;
+    return `${h} h ${m} min`;
+  }
+
+  getFirstTransitDeparture(journey: ConnectionJourney): { stationName: string; time: string } {
+    const firstTransitLeg = journey.legs?.find(l => !l.walking && l.line?.name);
+    if (firstTransitLeg) {
+      return {
+        stationName: firstTransitLeg.origin?.name || journey.origin.name,
+        time: this.formatTime(firstTransitLeg.departure || journey.departure)
+      };
+    }
+    return {
+      stationName: journey.origin.name,
+      time: this.formatTime(journey.departure)
+    };
+  }
+
+  getHvvBadgeStyle(rawName: string): { bg: string; text: string; shape: string } {
+    const name = (rawName || '').trim().toUpperCase();
+    if (name.startsWith('RB') || name.startsWith('RE') || name.startsWith('ME') || name.startsWith('AKN')) {
+      return { bg: 'bg-[#1F1612]', text: 'text-white', shape: 'rounded' };
+    }
+    if (name === 'S1') return { bg: 'bg-[#15803D]', text: 'text-white', shape: 'rounded-full' };
+    if (name === 'S2') return { bg: 'bg-[#991B1B]', text: 'text-white', shape: 'rounded-full' };
+    if (name === 'S3') return { bg: 'bg-[#6B21A8]', text: 'text-white', shape: 'rounded-full' };
+    if (name === 'S4') return { bg: 'bg-[#0284C7]', text: 'text-white', shape: 'rounded-full' };
+    if (name === 'S5') return { bg: 'bg-[#0369A1]', text: 'text-white', shape: 'rounded-full' };
+    if (name === 'S7') return { bg: 'bg-[#C2410C]', text: 'text-white', shape: 'rounded-full' };
+    if (name.startsWith('S')) return { bg: 'bg-[#15803D]', text: 'text-white', shape: 'rounded-full' };
+    if (name === 'U1') return { bg: 'bg-[#0284C7]', text: 'text-white', shape: 'rounded' };
+    if (name === 'U2') return { bg: 'bg-[#DC2626]', text: 'text-white', shape: 'rounded' };
+    if (name === 'U3') return { bg: 'bg-[#FACC15]', text: 'text-[#1F1612]', shape: 'rounded' };
+    if (name === 'U4') return { bg: 'bg-[#0D9488]', text: 'text-white', shape: 'rounded' };
+    if (name.startsWith('U')) return { bg: 'bg-[#0284C7]', text: 'text-white', shape: 'rounded' };
+    if (name.startsWith('BUS') || name.startsWith('X')) return { bg: 'bg-[#B91C1C]', text: 'text-white', shape: 'rounded' };
+    if (name.startsWith('FÄHRE') || name.startsWith('HADAG')) return { bg: 'bg-[#0369A1]', text: 'text-white', shape: 'rounded' };
+    return { bg: 'bg-[#1F1612]', text: 'text-white', shape: 'rounded' };
+  }
+
+  getDisplayRouteSegments(journey: ConnectionJourney): {
+    type: 'walk' | 'transit';
+    durationMinutes?: number;
+    lineName?: string;
+    hasAlert?: boolean;
+    style?: { bg: string; text: string; shape: string };
+  }[] {
+    const segments: {
+      type: 'walk' | 'transit';
+      durationMinutes?: number;
+      lineName?: string;
+      hasAlert?: boolean;
+      style?: { bg: string; text: string; shape: string };
+    }[] = [];
+
+    const hasStartWalk = Boolean(journey.isFromCurrentLocation);
+    if (hasStartWalk) {
+      segments.push({
+        type: 'walk',
+        durationMinutes: journey.walkToStartMinutes || 5
+      });
+    }
+
+    if (journey.legs && journey.legs.length > 0) {
+      journey.legs.forEach((leg, index) => {
+        if (leg.walking) {
+          if (index === 0 && hasStartWalk) return;
+          segments.push({
+            type: 'walk',
+            durationMinutes: leg.durationMinutes || 5
+          });
+        } else {
+          const lineName = leg.line?.name || 'Zug';
+          const hasAlert = Boolean(leg.departureDelay || (leg.remarks && leg.remarks.length > 0));
+          segments.push({
+            type: 'transit',
+            lineName,
+            hasAlert,
+            style: this.getHvvBadgeStyle(lineName)
+          });
+        }
+      });
+    }
+
+    return segments;
+  }
+
+  hasJourneyAlerts(journey: ConnectionJourney): boolean {
+    if (journey.cancelled) return true;
+    if (journey.hasDelay && journey.maxDelay >= 3) return true;
+    if (journey.legs?.some(l => l.cancelled || (l.remarks && l.remarks.length > 0))) return true;
+    return false;
+  }
+
+  getJourneyAlertText(journey: ConnectionJourney): string {
+    if (journey.cancelled) return 'Achtung: Fahrt oder Teilabschnitt fällt aus';
+    const allRemarks: string[] = [];
+    journey.legs?.forEach(l => {
+      if (l.remarks) {
+        l.remarks.forEach(r => {
+          const text = r.summary || r.text;
+          if (text) allRemarks.push(text);
+        });
+      }
+    });
+    if (allRemarks.length > 0) {
+      if (allRemarks.length === 1) return `Achtung: ${allRemarks[0]}`;
+      return `Achtung: ${allRemarks.length} Meldungen auf dieser Verbindung`;
+    }
+    if (journey.hasDelay && journey.maxDelay > 0) {
+      return `Achtung: Voraussichtlich +${journey.maxDelay} Min. Verspätung`;
+    }
+    return 'Achtung: Aktuelle Betriebsmeldung vorhanden';
   }
 
   getTransferComfort(journey: ConnectionJourney) {
@@ -3224,7 +3822,15 @@ export class PlannerView implements OnInit {
 
   isOriginCurrentLocation(): boolean {
     const from = this.fromStation();
-    return !!(from && (from.isCurrentLocation || from.id === 'current-location' || from.name.toLowerCase().includes('aktueller standort')));
+    return !!(
+      from && (
+        from.isCurrentLocation ||
+        from.id === 'current-location' ||
+        from.name.toLowerCase().includes('aktueller standort') ||
+        from.name.toLowerCase().includes('mein standort') ||
+        from.name.toLowerCase().includes('standort')
+      )
+    );
   }
 
   getWalkTimeToStation(station: Station | null): { minutes: number; distanceText: string } {
