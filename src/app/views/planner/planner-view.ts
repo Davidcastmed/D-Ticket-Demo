@@ -968,6 +968,16 @@ interface CuratedDestination {
                         <div class="inline-flex items-center gap-1.5 text-xs text-[#1F1612] font-semibold bg-[#FAF7F2] px-2.5 py-1 rounded-full border border-[#E6DED6]">
                           <span aria-hidden="true">{{ weather.icon }}</span>
                           <span>{{ weather.temperature }}°C {{ weather.cityName }}</span>
+                          <button
+                            type="button"
+                            (click)="refreshDestinationWeather($event)"
+                            [disabled]="isWeatherLoading()"
+                            class="w-4 h-4 rounded-full hover:bg-[#E6DED6] active:scale-95 flex items-center justify-center text-[#795548] hover:text-[#1F1612] transition-colors cursor-pointer disabled:opacity-50 ml-0.5"
+                            title="Wetter für {{ weather.cityName }} aktualisieren"
+                            aria-label="Wetterdaten für {{ weather.cityName }} neu laden"
+                          >
+                            <span class="mat-icon text-[11px] leading-none" [class.animate-spin]="isWeatherLoading()">refresh</span>
+                          </button>
                         </div>
                       }
                     </div>
@@ -1031,10 +1041,16 @@ interface CuratedDestination {
                             <div class="flex items-center gap-1.5 flex-wrap pt-1.5">
                               @for (seg of getDisplayRouteSegments(journey); track $index) {
                                 @if (seg.type === 'walk') {
-                                  <span class="inline-flex items-center text-[11px] font-bold text-[#1F1612]">
-                                    <span class="mat-icon text-sm" aria-hidden="true">directions_walk</span>
+                                  <button
+                                    type="button"
+                                    (click)="onWalkIconClick(journey, $event)"
+                                    class="inline-flex items-center gap-0.5 text-[11px] font-bold text-[#1F1612] hover:text-[#1B4332] hover:bg-[#FAF7F2] px-1.5 py-0.5 rounded-lg border border-transparent hover:border-[#B7E4C7] transition-all cursor-pointer group active:scale-95"
+                                    title="Fußweg zum Startbahnhof auf der Karte anzeigen"
+                                    aria-label="Fußweg zum Startbahnhof auf der Karte anzeigen"
+                                  >
+                                    <span class="mat-icon text-sm text-[#1B4332] group-hover:scale-110 transition-transform" aria-hidden="true">directions_walk</span>
                                     <span>{{ seg.durationMinutes }}m</span>
-                                  </span>
+                                  </button>
                                 } @else {
                                   <span
                                     class="inline-flex items-center px-1.5 py-0.5 text-[10px] font-black shadow-2xs uppercase tracking-tight"
@@ -1212,6 +1228,18 @@ interface CuratedDestination {
                           <span class="text-[11px] text-[#2D6A4F] font-bold bg-[#EDF9F0] px-2 py-0.5 rounded-full border border-[#B7E4C7]">
                             {{ weather.cityName }}
                           </span>
+                          <!-- Small refresh button -->
+                          <button
+                            type="button"
+                            id="btn-refresh-planner-weather"
+                            (click)="refreshDestinationWeather($event)"
+                            [disabled]="isWeatherLoading()"
+                            class="w-5 h-5 rounded-full hover:bg-[#FAF7F2] active:scale-95 flex items-center justify-center text-[#795548] hover:text-[#1F1612] transition-colors cursor-pointer disabled:opacity-50"
+                            title="Wetter für {{ weather.cityName }} aktualisieren"
+                            aria-label="Wetterdaten für {{ weather.cityName }} neu laden"
+                          >
+                            <span class="mat-icon text-xs leading-none" [class.animate-spin]="isWeatherLoading()">refresh</span>
+                          </button>
                         </div>
                       </div>
                     } @else if (isWeatherLoading()) {
@@ -1282,10 +1310,17 @@ interface CuratedDestination {
                           <div class="flex items-center gap-2 flex-wrap pt-0.5" aria-label="Fahrtverlauf">
                             @for (seg of getDisplayRouteSegments(journey); track $index) {
                               @if (seg.type === 'walk') {
-                                <div class="inline-flex items-center gap-1 text-xs sm:text-sm font-bold text-[#1F1612] shrink-0">
-                                  <span class="mat-icon text-base text-[#1F1612]" aria-hidden="true">directions_walk</span>
+                                <button
+                                  type="button"
+                                  (click)="onWalkIconClick(journey, $event)"
+                                  class="inline-flex items-center gap-1 text-xs sm:text-sm font-bold text-[#1F1612] hover:text-[#1B4332] hover:bg-[#FAF7F2] shrink-0 px-2 py-1 rounded-xl border border-transparent hover:border-[#B7E4C7] hover:shadow-xs transition-all cursor-pointer group active:scale-95"
+                                  title="Fußweg zum Startbahnhof auf der Karte anzeigen"
+                                  aria-label="Fußweg zum Startbahnhof auf der Karte anzeigen"
+                                >
+                                  <span class="mat-icon text-base text-[#1B4332] group-hover:scale-110 transition-transform" aria-hidden="true">directions_walk</span>
                                   <span>{{ seg.durationMinutes }} min</span>
-                                </div>
+                                  <span class="mat-icon text-xs text-[#2D6A4F] opacity-70 group-hover:opacity-100">map</span>
+                                </button>
                               } @else {
                                 <div
                                   class="inline-flex items-center justify-center px-2 py-0.5 text-xs font-black shadow-2xs shrink-0 relative select-none uppercase tracking-tight"
@@ -1917,6 +1952,7 @@ export class PlannerView implements OnInit, AfterViewInit {
   @Output() showOnMap = new EventEmitter<ConnectionJourney>();
   @Output() showStationOnMap = new EventEmitter<Station>();
   @Output() viewDetail = new EventEmitter<ConnectionJourney>();
+  @Output() viewWalkRoute = new EventEmitter<ConnectionJourney>();
   @Output() switchTab = new EventEmitter<'planner' | 'live-board' | 'hamburg-hub' | 'surprise' | 'favorites' | 'accessibility'>();
 
   private fb = inject(FormBuilder);
@@ -2534,6 +2570,18 @@ export class PlannerView implements OnInit, AfterViewInit {
       this.toStationQuery.set(station.name);
       this.transitService.recordRecentStation(station);
       this.checkAndTriggerAutoSearch('to');
+    }
+  }
+
+  async refreshDestinationWeather(event?: Event): Promise<void> {
+    if (event) {
+      event.stopPropagation();
+    }
+    const to = this.toStation();
+    const list = this.journeys();
+    const target = to || this.activeJourneyForMap()?.destination || (list.length > 0 ? list[0]?.destination : null);
+    if (target) {
+      await this.weatherService.getWeatherForStation(target, true);
     }
   }
 
@@ -3197,6 +3245,22 @@ export class PlannerView implements OnInit, AfterViewInit {
     setTimeout(() => {
       this.resultsMapView?.invalidateSize();
     }, 150);
+  }
+
+  onWalkIconClick(journey: ConnectionJourney, event?: Event): void {
+    if (event) {
+      event.stopPropagation();
+      event.preventDefault();
+    }
+    this.selectedMapJourney.set(journey);
+    if (this.resultsViewMode() === 'map') {
+      setTimeout(() => {
+        this.resultsMapView?.invalidateSize();
+        this.resultsMapView?.focusStep(0);
+        this.resultsMapView?.focusWalkingTrajectory();
+      }, 150);
+    }
+    this.viewWalkRoute.emit(journey);
   }
 
   getMapToggleTooltip(): string {

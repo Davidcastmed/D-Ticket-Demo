@@ -188,8 +188,11 @@ export class MapView implements OnInit, OnChanges, OnDestroy {
   hasWalkingData(): boolean {
     if (!this.activeJourney) return false;
     return Boolean(
-      this.activeJourney.isFromCurrentLocation &&
-      this.transitService.userLocation()
+      this.activeJourney.isFromCurrentLocation ||
+      this.isWalkingFocused() ||
+      this.activeJourney.walkToStartMinutes ||
+      this.activeJourney.legs[0]?.walking ||
+      (this.transitService.userLocation() && (this.activeJourney.legs[0]?.origin?.location || this.activeJourney.origin?.location))
     );
   }
 
@@ -248,18 +251,8 @@ export class MapView implements OnInit, OnChanges, OnDestroy {
     // Step 0: Walking from start to first station
     if (stepIndex === 0) {
       this.isWalkingFocused.set(true);
-      const userLoc = this.transitService.userLocation();
-      const firstStationLoc = journey.legs[0]?.origin?.location;
-      if (userLoc && firstStationLoc) {
-        this.map.fitBounds([
-          [userLoc.latitude, userLoc.longitude],
-          [firstStationLoc.latitude, firstStationLoc.longitude]
-        ], { padding: [50, 50], maxZoom: 17, animate: true });
-        return;
-      } else if (firstStationLoc) {
-        this.map.setView([firstStationLoc.latitude, firstStationLoc.longitude], 15, { animate: true });
-        return;
-      }
+      this.renderRouteAndMarkers();
+      return;
     }
 
     // Step 1 to N: Transit legs (stepIndex 1 corresponds to leg 0)
@@ -608,21 +601,45 @@ export class MapView implements OnInit, OnChanges, OnDestroy {
         }
       }
 
-      // Add user location and walking path to start station strictly when starting from current location
+      // Walking trajectory towards origin station:
+      // Active if starting from current location, or walking leg exists, or walking focus is active
       const userLoc = this.transitService.userLocation();
-      const hasWalkingTrajectory = Boolean(journey.isFromCurrentLocation && userLoc && journey.legs[0]?.origin?.location);
+      const originStation = journey.legs[0]?.origin || journey.origin;
+      const startLoc = originStation?.location;
 
-      if (hasWalkingTrajectory && userLoc && journey.legs[0]?.origin?.location) {
-        const startLoc = journey.legs[0].origin.location;
-        bounds.push([userLoc.latitude, userLoc.longitude]);
-        walkBounds.push([userLoc.latitude, userLoc.longitude]);
-        walkBounds.push([startLoc.latitude, startLoc.longitude]);
+      let walkStartCoords = userLoc;
+      let walkEndCoords = startLoc;
+
+      // Check if leg 0 is a designated walking leg with locations
+      if (journey.legs[0]?.walking && journey.legs[0].origin?.location && journey.legs[0].destination?.location) {
+        walkStartCoords = journey.legs[0].origin.location;
+        walkEndCoords = journey.legs[0].destination.location;
+      }
+
+      // If userLoc is not yet acquired but start station exists, provide a close walking approach
+      if (!walkStartCoords && walkEndCoords) {
+        walkStartCoords = {
+          latitude: walkEndCoords.latitude - 0.0032,
+          longitude: walkEndCoords.longitude - 0.0028
+        };
+      }
+
+      const hasWalkingTrajectory = Boolean(
+        (journey.isFromCurrentLocation || this.isWalkingFocused() || journey.walkToStartMinutes || journey.legs[0]?.walking) &&
+        walkStartCoords &&
+        walkEndCoords
+      );
+
+      if (hasWalkingTrajectory && walkStartCoords && walkEndCoords) {
+        bounds.push([walkStartCoords.latitude, walkStartCoords.longitude]);
+        walkBounds.push([walkStartCoords.latitude, walkStartCoords.longitude]);
+        walkBounds.push([walkEndCoords.latitude, walkEndCoords.longitude]);
 
         const bearingAngle = calculateBearing(
-          userLoc.latitude,
-          userLoc.longitude,
-          startLoc.latitude,
-          startLoc.longitude
+          walkStartCoords.latitude,
+          walkStartCoords.longitude,
+          walkEndCoords.latitude,
+          walkEndCoords.longitude
         );
         const activeHeading = this.currentHeading !== null ? this.currentHeading : bearingAngle;
 
@@ -661,22 +678,25 @@ export class MapView implements OnInit, OnChanges, OnDestroy {
           popupAnchor: [0, -20]
         });
 
-        const userMarker = L.marker([userLoc.latitude, userLoc.longitude], { icon: userIcon });
-        const streetLabel = this.transitService.userStreetNumber() || journey.startStreetNumber || 'Dein Standort (GPS)';
-        const fullAddr = this.transitService.userAddress() || journey.startAddress || '';
+        const userMarker = L.marker([walkStartCoords.latitude, walkStartCoords.longitude], { icon: userIcon });
+        const streetLabel = journey.startStreetNumber || this.transitService.userStreetNumber() || 'Dein Startpunkt';
+        const fullAddr = journey.startAddress || this.transitService.userAddress() || '';
+        const targetStationName = originStation?.name || 'Startbahnhof';
+        const walkMin = journey.walkToStartMinutes || (journey.legs[0]?.walking ? journey.legs[0].durationMinutes : 5) || 5;
+        const walkDist = journey.walkToStartDistanceMeters || 400;
 
         userMarker.bindPopup(`
           <div class="p-1.5 min-w-[190px]">
             <div class="font-black text-[#1A73E8] text-xs flex items-center gap-1.5">
-              <span class="mat-icon text-sm">my_location</span>
+              <span class="mat-icon text-sm">directions_walk</span>
               <span>${streetLabel}</span>
             </div>
             ${fullAddr && fullAddr !== streetLabel ? `<div class="text-[10px] text-[#795548] truncate mt-0.5">📍 ${fullAddr}</div>` : ''}
-            <div class="text-[11px] text-[#2D6A4F] font-bold mt-1">
-              🚶 ca. ${journey.walkToStartMinutes || 5} Min. Fußweg (${this.formatDistance(journey.walkToStartDistanceMeters)})
+            <div class="text-[11px] text-[#1B4332] font-bold mt-1">
+              🚶 ca. ${walkMin} Min. Fußweg (${this.formatDistance(walkDist)})
             </div>
-            <div class="text-[10px] text-[#795548] mt-0.5">
-              Richtung: ${journey.legs[0].origin.name} (Gleis ${journey.legs[0].departurePlatform || '1'})
+            <div class="text-[10px] text-[#2D6A4F] font-semibold mt-0.5">
+              Ziel: ${targetStationName} ${journey.legs[0]?.departurePlatform ? '(Gleis ' + journey.legs[0].departurePlatform + ')' : ''}
             </div>
           </div>
         `);
@@ -688,8 +708,8 @@ export class MapView implements OnInit, OnChanges, OnDestroy {
         // Dashed walking polyline (high visibility)
         const walkPolyline = L.polyline(
           [
-            [userLoc.latitude, userLoc.longitude],
-            [startLoc.latitude, startLoc.longitude]
+            [walkStartCoords.latitude, walkStartCoords.longitude],
+            [walkEndCoords.latitude, walkEndCoords.longitude]
           ],
           {
             color: '#1B4332',
@@ -701,20 +721,27 @@ export class MapView implements OnInit, OnChanges, OnDestroy {
         );
         walkPolyline.bindPopup(`
           <div class="p-1 text-xs">
-            <div class="font-black text-[#1B4332]">🚶 Fußweg zur Haltestelle</div>
+            <div class="font-black text-[#1B4332]">🚶 Fußweg zu ${targetStationName}</div>
             <div class="text-[10px] text-[#5D4037]">Ab: ${streetLabel}</div>
-            <div class="text-[11px] text-[#2D6A4F] font-bold mt-0.5">ca. ${journey.walkToStartMinutes || 5} Min. (${this.formatDistance(journey.walkToStartDistanceMeters)})</div>
+            <div class="text-[11px] text-[#2D6A4F] font-bold mt-0.5">ca. ${walkMin} Min. (${this.formatDistance(walkDist)})</div>
           </div>
         `);
         walkPolyline.on('click', () => {
           this.focusWalkingTrajectory();
         });
         this.routeLayer.addLayer(walkPolyline);
+
+        // If walking is focused, automatically open the walk guidance popup
+        if (this.isWalkingFocused()) {
+          setTimeout(() => {
+            walkPolyline.openPopup();
+          }, 200);
+        }
       }
 
       // Zoom behavior: High magnification for walking trajectory so user can inspect streets and zoom out freely
       if (this.isWalkingFocused() && walkBounds.length >= 2) {
-        this.map.fitBounds(walkBounds, { padding: [40, 40], maxZoom: 17, animate: true });
+        this.map.fitBounds(walkBounds, { padding: [50, 50], maxZoom: 17, animate: true });
       } else if (bounds.length > 0) {
         this.map.fitBounds(bounds, { padding: [40, 40], maxZoom: 13, animate: true });
       }

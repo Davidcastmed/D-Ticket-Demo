@@ -29,7 +29,7 @@ export class WeatherService {
   /**
    * Fetches weather for a destination station.
    */
-  async getWeatherForStation(station: Station | null): Promise<DestinationWeather | null> {
+  async getWeatherForStation(station: Station | null, forceRefresh = false): Promise<DestinationWeather | null> {
     if (!station || !station.name) {
       this.currentWeather.set(null);
       return null;
@@ -40,10 +40,12 @@ export class WeatherService {
       ? `${station.location.latitude.toFixed(2)}_${station.location.longitude.toFixed(2)}`
       : cleanCity.toLowerCase();
 
-    const cached = this.cache.get(cacheKey);
-    if (cached && Date.now() - cached.timestamp < this.CACHE_TTL_MS) {
-      this.currentWeather.set(cached.data);
-      return cached.data;
+    if (!forceRefresh) {
+      const cached = this.cache.get(cacheKey);
+      if (cached && Date.now() - cached.timestamp < this.CACHE_TTL_MS) {
+        this.currentWeather.set(cached.data);
+        return cached.data;
+      }
     }
 
     this.isLoading.set(true);

@@ -260,7 +260,8 @@
           @case ('planner') {
             <app-planner-view
               (showOnMap)="onShowJourneyOnMap($event)"
-              (viewDetail)="onOpenJourneyDetail($event)"
+              (viewDetail)="onOpenJourneyDetail($event, false)"
+              (viewWalkRoute)="onOpenJourneyDetail($event, true)"
               (switchTab)="setTab($event)"
             ></app-planner-view>
           }
@@ -326,6 +327,7 @@
   @if (inspectJourney()) {
     <app-journey-detail
       [journey]="inspectJourney()"
+      [focusWalkOnInit]="focusWalkOnDetail()"
       (closeModal)="inspectJourney.set(null)"
       (showOnMap)="onShowJourneyOnMap($event)"
     ></app-journey-detail>

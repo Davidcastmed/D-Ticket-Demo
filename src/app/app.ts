@@ -79,6 +79,7 @@ export class App {
 
   // Active inspection state
   readonly inspectJourney = signal<ConnectionJourney | null>(null);
+  readonly focusWalkOnDetail = signal<boolean>(false);
   readonly mapActiveJourney = signal<ConnectionJourney | null>(null);
   readonly mapSelectedStation = signal<Station | null>(null);
 
@@ -132,7 +133,8 @@ export class App {
     }
   }
 
-  onOpenJourneyDetail(journey: ConnectionJourney) {
+  onOpenJourneyDetail(journey: ConnectionJourney, focusWalk = false) {
+    this.focusWalkOnDetail.set(focusWalk);
     this.inspectJourney.set(journey);
   }
 

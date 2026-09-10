@@ -6,6 +6,9 @@ import {
   ChangeDetectionStrategy,
   OnInit,
   OnDestroy,
+  AfterViewInit,
+  OnChanges,
+  SimpleChanges,
   ViewChild,
   computed,
   inject,
@@ -49,8 +52,9 @@ export interface LegModeBadge {
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './journey-detail.html',
 })
-export class JourneyDetail implements OnInit, OnDestroy {
+export class JourneyDetail implements OnInit, OnDestroy, AfterViewInit, OnChanges {
   @Input() journey: ConnectionJourney | null = null;
+  @Input() focusWalkOnInit = false;
   @Output() closeModal = new EventEmitter<void>();
   @Output() showOnMap = new EventEmitter<ConnectionJourney>();
   @ViewChild('mapViewComponent') mapViewComponent?: MapView;
@@ -58,12 +62,23 @@ export class JourneyDetail implements OnInit, OnDestroy {
   private transitService = inject(TransitService);
   private weatherService = inject(WeatherService);
   readonly destinationWeather = this.weatherService.currentWeather;
+  readonly isWeatherLoading = this.weatherService.isLoading;
 
-  // Split-view Sheet Height percentage: default 50% (balanced view matching screenshot)
-  readonly sheetHeightPercent = signal<number>(50);
+  // Split-view Sheet Height percentage: default 80% as requested by user (80% details / 20% map)
+  readonly sheetHeightPercent = signal<number>(80);
+  readonly isDraggingSignal = signal<boolean>(false);
   private isDragging = false;
   private dragStartY = 0;
-  private startHeight = 50;
+  private dragStartTime = 0;
+  private startHeight = 80;
+
+  // Google Maps Bottom Sheet Snap Levels:
+  // 20% = Peek mode: high map visibility (80% map), connection summary
+  // 80% = Default split mode: balanced map with rich details visibility (80% details / 20% map)
+  // 100% = Full mode: details container goes all the way to the top (100% full screen)
+  readonly SNAP_MAP_PEEK = 20;
+  readonly SNAP_SPLIT_HALF = 80;
+  readonly SNAP_FULL_DETAILS = 100;
 
   // Step-by-step guidance along the route
   readonly currentStep = signal<number>(0);
@@ -121,10 +136,58 @@ export class JourneyDetail implements OnInit, OnDestroy {
 
     // Initial fetch of real-time delay and cancellation status
     this.fetchRealtimeStatus('live');
+    const initialH = this.focusWalkOnInit ? this.SNAP_MAP_PEEK : 80;
+    this.sheetHeightPercent.set(initialH);
+    this.startHeight = initialH;
 
     if (this.journey?.destination) {
       this.weatherService.getWeatherForStation(this.journey.destination);
     }
+  }
+
+  ngAfterViewInit(): void {
+    if (typeof window !== 'undefined') {
+      setTimeout(() => {
+        this.mapViewComponent?.invalidateSize();
+        if (this.focusWalkOnInit) {
+          this.focusWalkOnMap();
+        }
+      }, 150);
+      setTimeout(() => {
+        this.mapViewComponent?.invalidateSize();
+      }, 420);
+    }
+  }
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['focusWalkOnInit'] && this.focusWalkOnInit) {
+      this.focusWalkOnMap();
+      return;
+    }
+    if (changes['journey'] && this.journey) {
+      const targetH = this.focusWalkOnInit ? this.SNAP_MAP_PEEK : 80;
+      this.sheetHeightPercent.set(targetH);
+      this.startHeight = targetH;
+      if (typeof window !== 'undefined') {
+        setTimeout(() => {
+          this.mapViewComponent?.invalidateSize();
+          if (this.focusWalkOnInit) {
+            this.focusWalkOnMap();
+          }
+        }, 120);
+      }
+    }
+  }
+
+  focusWalkOnMap(): void {
+    this.currentStep.set(0);
+    // Lower the bottom sheet to map mode (80% map / 20% sheet) so user is directed straight to map
+    this.snapTo('map');
+    setTimeout(() => {
+      this.mapViewComponent?.invalidateSize();
+      this.mapViewComponent?.focusStep(0);
+      this.mapViewComponent?.focusWalkingTrajectory();
+    }, 150);
   }
 
   ngOnDestroy(): void {
@@ -150,9 +213,22 @@ export class JourneyDetail implements OnInit, OnDestroy {
     }
   }
 
+  async refreshDestinationWeather(event?: Event): Promise<void> {
+    if (event) {
+      event.stopPropagation();
+    }
+    if (this.journey?.destination) {
+      await this.weatherService.getWeatherForStation(this.journey.destination, true);
+    }
+  }
+
   goToStep(stepIndex: number): void {
     this.currentStep.set(stepIndex);
-    this.mapViewComponent?.focusStep(stepIndex);
+    if (stepIndex === 0) {
+      this.focusWalkOnMap();
+    } else {
+      this.mapViewComponent?.focusStep(stepIndex);
+    }
   }
 
   prevStep(): void {
@@ -177,7 +253,9 @@ export class JourneyDetail implements OnInit, OnDestroy {
 
   onDragStart(event: PointerEvent): void {
     this.isDragging = true;
+    this.isDraggingSignal.set(true);
     this.dragStartY = event.clientY;
+    this.dragStartTime = Date.now();
     this.startHeight = this.sheetHeightPercent();
     const el = event.currentTarget as HTMLElement;
     if (el?.setPointerCapture) {
@@ -185,7 +263,6 @@ export class JourneyDetail implements OnInit, OnDestroy {
         el.setPointerCapture(event.pointerId);
       } catch {
         // Pointer capture fallback if not supported
-        return;
       }
     }
   }
@@ -195,44 +272,183 @@ export class JourneyDetail implements OnInit, OnDestroy {
     const deltaY = this.dragStartY - event.clientY; // upward drag increases bottom sheet height
     const winH = typeof window !== 'undefined' ? window.innerHeight : 800;
     const deltaPercent = (deltaY / winH) * 100;
-    const newHeight = Math.min(88, Math.max(22, this.startHeight + deltaPercent));
+    // Allow dragging smoothly up to 100% (container rises to the top to show all details) and down to 16% (peek)
+    const newHeight = Math.min(100, Math.max(16, this.startHeight + deltaPercent));
     this.sheetHeightPercent.set(Math.round(newHeight));
-    this.mapViewComponent?.invalidateSize();
   }
 
   onDragEnd(event: PointerEvent): void {
     if (!this.isDragging) return;
     this.isDragging = false;
+    this.isDraggingSignal.set(false);
     const el = event.currentTarget as HTMLElement;
     if (el?.releasePointerCapture) {
       try {
         el.releasePointerCapture(event.pointerId);
       } catch {
-        // Pointer capture fallback if not supported
-        return;
+        // Ignore fallback
       }
     }
-    this.mapViewComponent?.invalidateSize();
+
+    const timeElapsed = Math.max(1, Date.now() - this.dragStartTime);
+    const deltaY = this.dragStartY - event.clientY;
+    const velocity = deltaY / timeElapsed; // px/ms: positive = upward flick, negative = downward flick
+    const curHeight = this.sheetHeightPercent();
+
+    let targetSnap: number;
+    // Flick gesture detection (quick swipe up or down)
+    if (velocity > 0.3) {
+      // Swiped firmly upwards
+      if (curHeight < 40) {
+        targetSnap = this.SNAP_SPLIT_HALF; // 80%
+      } else {
+        targetSnap = this.SNAP_FULL_DETAILS; // 100%
+      }
+    } else if (velocity < -0.3) {
+      // Swiped firmly downwards
+      if (curHeight > 88) {
+        targetSnap = this.SNAP_SPLIT_HALF; // 80%
+      } else {
+        targetSnap = this.SNAP_MAP_PEEK; // 20%
+      }
+    } else {
+      // Position-based snap zones:
+      // < 40% -> Snap to 20% (Map prominent)
+      // 40% to 90% -> Snap to 80% (Standard default details view: 80% details / 20% map)
+      // >= 90% -> Snap to 100% (Full details container reaching the very top)
+      if (curHeight < 40) {
+        targetSnap = this.SNAP_MAP_PEEK;
+      } else if (curHeight < 90) {
+        targetSnap = this.SNAP_SPLIT_HALF;
+      } else {
+        targetSnap = this.SNAP_FULL_DETAILS;
+      }
+    }
+
+    this.sheetHeightPercent.set(targetSnap);
+    setTimeout(() => {
+      this.mapViewComponent?.invalidateSize();
+    }, 390);
   }
 
-  toggleSheetHeight(target?: 'map' | 'details'): void {
-    if (target === 'map') {
-      this.sheetHeightPercent.set(28);
-    } else if (target === 'details') {
-      this.sheetHeightPercent.set(65);
+  snapTo(level: 'map' | 'half' | 'details'): void {
+    if (level === 'map') {
+      this.sheetHeightPercent.set(this.SNAP_MAP_PEEK);
+    } else if (level === 'half') {
+      this.sheetHeightPercent.set(this.SNAP_SPLIT_HALF);
     } else {
-      const cur = this.sheetHeightPercent();
-      if (cur > 42) {
-        // Expand map / peek sheet
-        this.sheetHeightPercent.set(28);
-      } else {
-        // Expand sheet / read connection steps
-        this.sheetHeightPercent.set(65);
-      }
+      this.sheetHeightPercent.set(this.SNAP_FULL_DETAILS);
     }
     setTimeout(() => {
       this.mapViewComponent?.invalidateSize();
-    }, 120);
+    }, 390);
+  }
+
+  toggleSheetHeight(target?: 'map' | 'half' | 'details'): void {
+    if (target) {
+      this.snapTo(target);
+      return;
+    }
+    const cur = this.sheetHeightPercent();
+    if (cur >= 90) {
+      // If full, step down to 80%
+      this.snapTo('half');
+    } else if (cur >= 50) {
+      // If 80%, expand to full details
+      this.snapTo('details');
+    } else {
+      // If peek, expand to 80%
+      this.snapTo('half');
+    }
+  }
+
+  /**
+   * Helper to return clean visual theme colors & category for the animated weather card
+   */
+  getWeatherTheme(code: number | undefined): {
+    cardBg: string;
+    cardBorder: string;
+    textPrimary: string;
+    textSecondary: string;
+    badgeBg: string;
+    badgeBorder: string;
+    type: 'sunny' | 'partlyCloudy' | 'cloudy' | 'rainy' | 'snowy' | 'foggy';
+  } {
+    if (code === undefined) {
+      return {
+        cardBg: 'bg-linear-to-r from-[#FFFDF9] via-[#FAF7F2] to-[#F5EFE6]',
+        cardBorder: 'border-[#E6DED6]',
+        textPrimary: 'text-[#1F1612]',
+        textSecondary: 'text-[#795548]',
+        badgeBg: 'bg-white/80',
+        badgeBorder: 'border-[#E6DED6]',
+        type: 'sunny'
+      };
+    }
+    if (code === 0) {
+      return {
+        cardBg: 'bg-linear-to-r from-[#FFFBEB] via-[#FEF3C7] to-[#FDE68A]/60',
+        cardBorder: 'border-[#FDE68A]',
+        textPrimary: 'text-[#78350F]',
+        textSecondary: 'text-[#92400E]',
+        badgeBg: 'bg-white/85',
+        badgeBorder: 'border-[#FCD34D]',
+        type: 'sunny'
+      };
+    }
+    if (code === 1 || code === 2) {
+      return {
+        cardBg: 'bg-linear-to-r from-[#F8FAFC] via-[#F1F5F9] to-[#E2E8F0]',
+        cardBorder: 'border-[#CBD5E1]',
+        textPrimary: 'text-[#1E293B]',
+        textSecondary: 'text-[#64748B]',
+        badgeBg: 'bg-white/85',
+        badgeBorder: 'border-[#CBD5E1]',
+        type: 'partlyCloudy'
+      };
+    }
+    if (code === 3) {
+      return {
+        cardBg: 'bg-linear-to-r from-[#F8FAFC] via-[#F1F5F9] to-[#E2E8F0]',
+        cardBorder: 'border-[#CBD5E1]',
+        textPrimary: 'text-[#334155]',
+        textSecondary: 'text-[#64748B]',
+        badgeBg: 'bg-white/85',
+        badgeBorder: 'border-[#CBD5E1]',
+        type: 'cloudy'
+      };
+    }
+    if ([51, 53, 55, 61, 63, 65, 80, 81, 82].includes(code)) {
+      return {
+        cardBg: 'bg-linear-to-r from-[#F0F9FF] via-[#E0F2FE] to-[#BAE6FD]/70',
+        cardBorder: 'border-[#7DD3FC]',
+        textPrimary: 'text-[#0C4A6E]',
+        textSecondary: 'text-[#0369A1]',
+        badgeBg: 'bg-white/85',
+        badgeBorder: 'border-[#7DD3FC]',
+        type: 'rainy'
+      };
+    }
+    if ([71, 73, 75, 77, 85, 86].includes(code)) {
+      return {
+        cardBg: 'bg-linear-to-r from-[#F8FAFC] via-[#EFF6FF] to-[#DBEAFE]',
+        cardBorder: 'border-[#BFDBFE]',
+        textPrimary: 'text-[#1E3A8A]',
+        textSecondary: 'text-[#3B82F6]',
+        badgeBg: 'bg-white/85',
+        badgeBorder: 'border-[#BFDBFE]',
+        type: 'snowy'
+      };
+    }
+    return {
+      cardBg: 'bg-linear-to-r from-[#F8FAFC] via-[#F1F5F9] to-[#E2E8F0]',
+      cardBorder: 'border-[#CBD5E1]',
+      textPrimary: 'text-[#334155]',
+      textSecondary: 'text-[#64748B]',
+      badgeBg: 'bg-white/85',
+      badgeBorder: 'border-[#CBD5E1]',
+      type: 'foggy'
+    };
   }
 
   openTicketModal(): void {

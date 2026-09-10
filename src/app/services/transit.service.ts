@@ -138,6 +138,7 @@ export class TransitService {
   );
   readonly isLocating = signal<boolean>(false);
   readonly isTrackingActive = signal<boolean>(false);
+  readonly userGpsHeading = signal<number | null>(null);
   readonly isRealGpsAcquired = signal<boolean>(this.savedLocationCache?.isRealGps || false);
   readonly locationStatus = signal<'initial' | 'locating' | 'granted' | 'denied' | 'fallback'>(
     this.savedLocationCache?.isRealGps ? 'granted' : 'initial'
@@ -384,6 +385,9 @@ export class TransitService {
           };
           this.userLocation.set(loc);
           this.isRealGpsAcquired.set(true);
+          if (pos.coords.heading !== null && !isNaN(pos.coords.heading) && pos.coords.heading >= 0) {
+            this.userGpsHeading.set(pos.coords.heading);
+          }
           this.persistUserLocation({
             latitude: loc.latitude,
             longitude: loc.longitude,

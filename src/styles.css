@@ -162,3 +162,81 @@
   color: white;
   border-radius: 7px !important;
 }
+
+/* Google Maps Bottom Sheet natural motion curve with fluid emphasized deceleration */
+.gmaps-sheet-transition {
+  transition: height 380ms cubic-bezier(0.05, 0.7, 0.1, 1.0) !important;
+  will-change: height;
+}
+
+.gmaps-sheet-dragging {
+  transition: none !important;
+  will-change: height;
+}
+
+/* Atmospheric Weather Card Animations */
+@keyframes weather-sun-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes weather-sun-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.95; }
+  50% { transform: scale(1.08); opacity: 1; }
+}
+
+@keyframes weather-cloud-drift {
+  0%, 100% { transform: translateX(0px); }
+  50% { transform: translateX(5px); }
+}
+
+@keyframes weather-cloud-drift-slow {
+  0%, 100% { transform: translateX(0px); }
+  50% { transform: translateX(-4px); }
+}
+
+@keyframes weather-raindrop {
+  0% { transform: translateY(-4px); opacity: 0; }
+  35% { opacity: 0.9; }
+  100% { transform: translateY(10px); opacity: 0; }
+}
+
+@keyframes weather-mist-wave {
+  0%, 100% { transform: scaleX(0.95) translateX(-2px); opacity: 0.5; }
+  50% { transform: scaleX(1.05) translateX(2px); opacity: 0.85; }
+}
+
+.animate-weather-sun-spin {
+  animation: weather-sun-spin 22s linear infinite;
+  transform-origin: center center;
+}
+
+.animate-weather-sun-pulse {
+  animation: weather-sun-pulse 3.5s ease-in-out infinite;
+  transform-origin: center center;
+}
+
+.animate-weather-cloud {
+  animation: weather-cloud-drift 4.2s ease-in-out infinite;
+}
+
+.animate-weather-cloud-slow {
+  animation: weather-cloud-drift-slow 6s ease-in-out infinite;
+}
+
+.animate-weather-rain-1 {
+  animation: weather-raindrop 1.1s linear infinite;
+}
+
+.animate-weather-rain-2 {
+  animation: weather-raindrop 1.3s linear 0.35s infinite;
+}
+
+.animate-weather-rain-3 {
+  animation: weather-raindrop 1.2s linear 0.7s infinite;
+}
+
+.animate-weather-mist {
+  animation: weather-mist-wave 3.8s ease-in-out infinite;
+}
+

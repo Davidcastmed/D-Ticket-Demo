@@ -11,9 +11,11 @@
     <!-- 1. TOP PANE: INTERACTIVE LEAFLET MAP VIEW -->
     <!-- ========================================== -->
     <div
-      class="relative w-full overflow-hidden shrink-0 transition-[height] duration-75"
+      class="relative w-full overflow-hidden shrink-0"
+      [class.gmaps-sheet-dragging]="isDraggingSignal()"
+      [class.gmaps-sheet-transition]="!isDraggingSignal()"
       [style.height]="'calc(100% - ' + sheetHeightPercent() + '%)'"
-      style="min-height: 120px;"
+      style="min-height: 0px;"
     >
       <!-- Leaflet Map edge-to-edge -->
       <app-map-view
@@ -24,17 +26,19 @@
         [hideDefaultOverlays]="true"
       ></app-map-view>
 
-      <!-- Floating Circular Back Button (Matching HVV Switch / Google Maps top-left) -->
-      <button
-        type="button"
-        id="btn-journey-detail-back"
-        (click)="closeModal.emit()"
-        class="absolute top-4 left-4 z-[450] w-11 h-11 rounded-full bg-white shadow-md border border-[#E0E0E0] hover:bg-[#FAF7F2] active:scale-95 flex items-center justify-center text-[#1F1612] cursor-pointer transition-all"
-        title="Zurück zur Verbindungssuche"
-        aria-label="Fahrtdetails schließen und zur Suche zurückkehren"
-      >
-        <span class="mat-icon text-2xl text-[#1F1612]">arrow_back</span>
-      </button>
+      <!-- Floating Circular Back Button (Matching Google Maps / HVV Switch top-left) -->
+      @if (sheetHeightPercent() < 82) {
+        <button
+          type="button"
+          id="btn-journey-detail-back"
+          (click)="closeModal.emit()"
+          class="absolute top-4 left-4 z-[450] w-11 h-11 rounded-full bg-white shadow-md border border-[#E0E0E0] hover:bg-[#FAF7F2] active:scale-95 flex items-center justify-center text-[#1F1612] cursor-pointer transition-all"
+          title="Zurück zur Verbindungssuche"
+          aria-label="Zurück zur Verbindungssuche"
+        >
+          <span class="mat-icon text-2xl text-[#1F1612]">arrow_back</span>
+        </button>
+      }
 
       <!-- Floating Trajectory Guidance Pill (HVV Switch step indicator: e.g. "🚶 9 min – 570m") -->
       <div class="absolute top-4 left-18 sm:left-20 right-4 sm:right-auto z-[450] flex items-center gap-2">
@@ -42,8 +46,15 @@
           <!-- Step Icon & Text -->
           <div class="flex items-center gap-1.5 min-w-0 truncate">
             @if (currentStep() === 0) {
-              <span class="mat-icon text-sm text-[#52B788]">directions_walk</span>
-              <span class="truncate">Gehe {{ getWalkDistanceMeters(journey) }}m ({{ getFirstWalkMinutes(journey) }} min)</span>
+              <button
+                type="button"
+                (click)="focusWalkOnMap()"
+                class="inline-flex items-center gap-1.5 min-w-0 truncate hover:text-[#A7F3D0] transition-colors cursor-pointer text-left"
+                title="Fußweg zum Startbahnhof auf der Karte anzeigen"
+              >
+                <span class="mat-icon text-sm text-[#52B788] animate-pulse">directions_walk</span>
+                <span class="truncate">Gehe {{ getWalkDistanceMeters(journey) }}m ({{ getFirstWalkMinutes(journey) }} min)</span>
+              </button>
             } @else if (currentStep() <= journey.legs.length) {
               @let leg = journey.legs[currentStep() - 1];
               <span class="mat-icon text-sm text-[#52B788]">
@@ -94,126 +105,340 @@
         </button>
       </div>
 
-      <!-- Quick Toggle button on bottom right of the map -->
-      <button
-        type="button"
-        (click)="toggleSheetHeight()"
-        class="absolute bottom-4 right-4 z-[450] bg-white/95 hover:bg-white shadow-md border border-[#E0E0E0] px-3 py-1.5 rounded-full text-xs font-bold text-[#1F1612] flex items-center gap-1.5 cursor-pointer transition-all active:scale-95"
-        title="Verbindungen vergrößern oder verkleinern"
-        aria-label="Verbindungen in der Höhe anpassen"
-      >
-        <span class="mat-icon text-sm">
-          {{ sheetHeightPercent() > 60 ? 'expand_more' : 'expand_less' }}
-        </span>
-        <span class="hidden sm:inline">
-          {{ sheetHeightPercent() > 60 ? 'Mehr Karte' : 'Mehr Verbindungen' }}
-        </span>
-      </button>
+      <!-- Quick Expand / Collapse Pill when in map mode -->
+      @if (sheetHeightPercent() <= 35) {
+        <button
+          type="button"
+          (click)="snapTo('details')"
+          class="absolute bottom-4 right-4 z-[450] bg-white/95 hover:bg-white shadow-md border border-[#E0E0E0] px-3.5 py-1.5 rounded-full text-xs font-bold text-[#1F1612] flex items-center gap-1.5 cursor-pointer transition-all active:scale-95"
+          title="Verbindungsdetails ganz nach oben schieben"
+          aria-label="Verbindungsdetails maximieren"
+        >
+          <span class="mat-icon text-sm text-[#1B4332]">expand_less</span>
+          <span>Details anzeigen</span>
+        </button>
+      }
     </div>
 
     <!-- ============================================================== -->
-    <!-- 2. BOTTOM PANE: RESIZABLE BOTTOM SHEET / CONNECTIONS LIST PANEL -->
+    <!-- 2. UNIFIED DETAILS CONTAINER (CAN RISE ALL THE WAY TO TOP 100%) -->
     <!-- ============================================================== -->
     <div
-      class="relative w-full bg-white rounded-t-[28px] shadow-[0_-8px_30px_rgba(0,0,0,0.12)] border-t border-[#E5E5E5] flex flex-col overflow-hidden transition-[height] duration-75"
+      id="journey-details-single-container"
+      class="relative w-full bg-white rounded-t-[28px] shadow-[0_-8px_30px_rgba(0,0,0,0.14)] border-t border-[#E5E5E5] flex flex-col overflow-hidden"
+      [class.gmaps-sheet-dragging]="isDraggingSignal()"
+      [class.gmaps-sheet-transition]="!isDraggingSignal()"
       [style.height]="sheetHeightPercent() + '%'"
-      style="min-height: 22%; max-height: 88%;"
+      style="min-height: 16%; max-height: 100%;"
     >
-      <!-- Draggable Handle Bar (Allows moving either map or connections) -->
+      <!-- 1. Drag Handle & Snap Buttons (Karte 20%, Geteilt 50%, Details 100%) -->
       <div
-        class="w-full flex flex-col items-center justify-center pt-2.5 pb-2 cursor-grab active:cursor-grabbing select-none touch-none hover:bg-black/2 transition-colors shrink-0"
+        class="w-full flex flex-col items-center justify-center pt-2 pb-1.5 cursor-grab active:cursor-grabbing touch-none select-none shrink-0 border-b border-[#F0F0F0]/60"
         (pointerdown)="onDragStart($event)"
         (pointermove)="onDragMove($event)"
         (pointerup)="onDragEnd($event)"
         (pointercancel)="onDragEnd($event)"
         (dblclick)="toggleSheetHeight()"
-        title="Ziehen, um die Höhe anzupassen"
+        title="Ziehen, um die Höhe wie bei Google Maps anzupassen"
         aria-label="Verbindungspanel verschieben"
       >
-        <div class="w-12 h-1.5 bg-[#D0C9C0] hover:bg-[#8D6E63] rounded-full transition-colors"></div>
-      </div>
+        <!-- Center Pill Handle -->
+        <div class="w-12 h-1.5 bg-[#D0C9C0] hover:bg-[#8D6E63] rounded-full transition-colors mb-1.5"></div>
 
-      <!-- Pinned Header (Authentic HVV Switch design matching user's screenshot) -->
-      <div class="px-5 sm:px-6 pb-3 border-b border-[#F0F0F0] shrink-0 space-y-3 select-text">
-        <!-- Top Row: Departure title, Arrival subtitle with live icon, and Pin button -->
-        <div class="flex items-start justify-between gap-3">
-          <div class="min-w-0 space-y-0.5">
-            <!-- "um [Uhrzeit] losgehen" (or "Jetzt losgehen") -->
-            <div class="text-xl sm:text-2xl font-black text-[#1F1612] tracking-tight leading-tight">
-              um {{ formatTime(journey.departure) }} losgehen
-            </div>
-
-            <!-- "Ankunft [Uhrzeit] [Live-Symbol] | [Dauer]" -->
-            <div class="flex items-center gap-1.5 text-sm sm:text-base font-bold text-[#1F1612]">
-              <span>Ankunft {{ formatTime(journey.arrival) }}</span>
-
-              <!-- Live Telemetry Waves Icon -->
-              <svg class="w-4 h-4 text-[#1F1612] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-label="Echtzeitdaten aktiv">
-                <path d="M5 12.55a11 11 0 0 1 14.08 0"/>
-                <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
-                <circle cx="12" cy="20" r="1" fill="currentColor"/>
-              </svg>
-
-              <span class="text-[#BDBDBD] font-light select-none px-0.5">|</span>
-              <span>{{ formatHvvDuration(journey.durationMinutes) }}</span>
-            </div>
-
-            <!-- Refresh Status: "Aktualisiert: Jetzt" -->
-            <button
-              type="button"
-              id="btn-refresh-live-status"
-              (click)="fetchRealtimeStatus('live')"
-              [disabled]="isLoadingLiveStatus()"
-              class="flex items-center gap-1 text-xs text-[#0066CC] hover:underline cursor-pointer pt-0.5"
-              title="Echtzeitdaten neu laden"
-              aria-label="Echtzeitdaten aktualisieren"
-            >
-              <span class="mat-icon text-sm" [class.animate-spin]="isLoadingLiveStatus()">refresh</span>
-              <span>Aktualisiert: {{ lastRefreshText() }}</span>
-            </button>
-          </div>
-
-          <!-- Right Pin / Bookmark Button (Matching screenshot) -->
+        <!-- Snap Level Chips: Karte (20%), Geteilt (50%), Details (100%) -->
+        <div class="flex items-center gap-1.5 px-2">
           <button
             type="button"
-            id="btn-pin-route"
-            (click)="togglePin()"
-            class="w-11 h-11 rounded-full border border-[#E0E0E0] shadow-2xs bg-white hover:bg-[#FAF7F2] active:scale-95 flex items-center justify-center cursor-pointer transition-all shrink-0"
-            [class.border-[#1B4332]]="isPinned()"
-            [class.bg-[#EDF9F0]]="isPinned()"
-            title="{{ isPinned() ? 'Verbindung aus Favoriten entfernen' : 'Verbindung anpinnen' }}"
-            aria-label="Verbindung zu Favoriten hinzufügen"
+            (click)="snapTo('map'); $event.stopPropagation()"
+            class="px-2.5 py-0.5 rounded-full text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1 border"
+            [class.bg-[#1F1612]]="sheetHeightPercent() <= 30"
+            [class.text-white]="sheetHeightPercent() <= 30"
+            [class.border-[#1F1612]]="sheetHeightPercent() <= 30"
+            [class.bg-[#FAF7F2]]="sheetHeightPercent() > 30"
+            [class.text-[#757575]]="sheetHeightPercent() > 30"
+            [class.border-transparent]="sheetHeightPercent() > 30"
+            title="Karte in den Vordergrund stellen"
           >
-            <span class="mat-icon text-xl" [class.text-[#1B4332]]="isPinned()" [class.text-[#1F1612]]="!isPinned()">
-              {{ isPinned() ? 'bookmark' : 'push_pin' }}
-            </span>
+            <span class="mat-icon text-xs">map</span>
+            <span>Karte</span>
+          </button>
+
+          <button
+            type="button"
+            (click)="snapTo('half'); $event.stopPropagation()"
+            class="px-2.5 py-0.5 rounded-full text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1 border"
+            [class.bg-[#1F1612]]="sheetHeightPercent() > 30 && sheetHeightPercent() < 90"
+            [class.text-white]="sheetHeightPercent() > 30 && sheetHeightPercent() < 90"
+            [class.border-[#1F1612]]="sheetHeightPercent() > 30 && sheetHeightPercent() < 90"
+            [class.bg-[#FAF7F2]]="sheetHeightPercent() <= 30 || sheetHeightPercent() >= 90"
+            [class.text-[#757575]]="sheetHeightPercent() <= 30 || sheetHeightPercent() >= 90"
+            [class.border-transparent]="sheetHeightPercent() <= 30 || sheetHeightPercent() >= 90"
+            title="Standardansicht: Geteilt"
+          >
+            <span class="mat-icon text-xs">vertical_split</span>
+            <span>Geteilt</span>
+          </button>
+
+          <button
+            type="button"
+            (click)="snapTo('details'); $event.stopPropagation()"
+            class="px-2.5 py-0.5 rounded-full text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1 border"
+            [class.bg-[#1F1612]]="sheetHeightPercent() >= 90"
+            [class.text-white]="sheetHeightPercent() >= 90"
+            [class.border-[#1F1612]]="sheetHeightPercent() >= 90"
+            [class.bg-[#FAF7F2]]="sheetHeightPercent() < 90"
+            [class.text-[#757575]]="sheetHeightPercent() < 90"
+            [class.border-transparent]="sheetHeightPercent() < 90"
+            title="Details maximieren"
+          >
+            <span class="mat-icon text-xs">format_list_bulleted</span>
+            <span>Details</span>
           </button>
         </div>
+      </div>
 
-        <!-- Full-Width "Ticket kaufen" Action Button (Matching screenshot) -->
+      <!-- ============================================================== -->
+      <!-- 2. UNIFIED DETAILS CONTAINER (FROM RIGHT ABOVE ZURÜCK DOWN)    -->
+      <!-- ============================================================== -->
+      <main class="flex-1 overflow-y-auto px-4 sm:px-6 pt-2 pb-6 space-y-3.5 select-text">
+
+        <!-- TOP BAR: Botón Zurück, Destino/Ruta, Botón Ver Mapa, Botón Pinchar -->
+        <div class="flex items-center justify-between gap-2">
+          <!-- 1. Botón Zurück -->
+          <button
+            type="button"
+            id="btn-journey-detail-header-back"
+            (click)="closeModal.emit()"
+            class="flex items-center gap-1.5 py-1.5 px-3 rounded-full bg-white hover:bg-[#FAF7F2] active:scale-95 text-[#1F1612] font-black text-xs sm:text-sm cursor-pointer transition-all border border-[#E0E0E0] shadow-2xs shrink-0"
+            title="Zurück zur Verbindungssuche"
+            aria-label="Zurück zur Verbindungssuche"
+          >
+            <span class="mat-icon text-lg text-[#1F1612]">arrow_back</span>
+            <span>Zurück</span>
+          </button>
+
+          <!-- 2. Centro: Destino de la conexión -->
+          <div class="flex-1 min-w-0 flex items-center justify-center px-1">
+            @if (journey?.destination) {
+              <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FAF7F2] border border-[#E6DED6] text-xs font-bold text-[#1F1612] shadow-2xs max-w-full truncate">
+                <span class="mat-icon text-sm text-[#1B4332] shrink-0">place</span>
+                <span class="truncate">Nach {{ journey?.destination?.name }}</span>
+              </div>
+            }
+          </div>
+
+          <!-- 3. Botón ver mapa & 4. Botón pinchar -->
+          <div class="flex items-center gap-1.5 shrink-0">
+            <!-- Botón ver mapa -->
+            <button
+              type="button"
+              id="btn-toggle-map-view"
+              (click)="sheetHeightPercent() >= 50 ? snapTo('map') : snapTo('half')"
+              class="h-8 sm:h-9 px-2.5 rounded-full border border-[#E0E0E0] shadow-2xs bg-white hover:bg-[#FAF7F2] active:scale-95 flex items-center gap-1 text-xs font-bold text-[#1F1612] cursor-pointer transition-all"
+              [title]="sheetHeightPercent() >= 50 ? 'Karte anzeigen' : 'Details vergrößern'"
+              aria-label="Karte umschalten"
+            >
+              <span class="mat-icon text-base text-[#1B4332]">
+                {{ sheetHeightPercent() >= 50 ? 'map' : 'unfold_more' }}
+              </span>
+              <span class="hidden sm:inline font-bold">
+                {{ sheetHeightPercent() >= 50 ? 'Karte' : 'Details' }}
+              </span>
+            </button>
+
+            <!-- Botón pinchar (anpinnen / favorito) -->
+            <button
+              type="button"
+              id="btn-pin-route"
+              (click)="togglePin()"
+              class="w-8 h-8 sm:w-9 sm:h-9 rounded-full border border-[#E0E0E0] shadow-2xs bg-white hover:bg-[#FAF7F2] active:scale-95 flex items-center justify-center cursor-pointer transition-all shrink-0"
+              [class.border-[#1B4332]]="isPinned()"
+              [class.bg-[#EDF9F0]]="isPinned()"
+              title="{{ isPinned() ? 'Verbindung aus Favoriten entfernen' : 'Verbindung anpinnen' }}"
+              aria-label="Verbindung anpinnen"
+            >
+              <span class="mat-icon text-lg" [class.text-[#1B4332]]="isPinned()" [class.text-[#1F1612]]="!isPinned()">
+                {{ isPinned() ? 'bookmark' : 'push_pin' }}
+              </span>
+            </button>
+          </div>
+        </div>
+
+        <!-- ============================================================== -->
+        <!-- ANIMATED WEATHER SHOWCASE CARD (OCCUPYING THE EXACT SPACE)     -->
+        <!-- ============================================================== -->
+        @if (destinationWeather(); as weather) {
+          @let theme = getWeatherTheme(weather.weatherCode);
+          <div
+            id="journey-destination-weather-showcase"
+            class="w-full rounded-2xl p-3.5 sm:p-4 border shadow-2xs transition-all select-none relative overflow-hidden"
+            [class]="theme.cardBg + ' ' + theme.cardBorder"
+          >
+            <!-- Atmospheric decorative ambient glow -->
+            <div
+              class="absolute -right-6 -bottom-6 w-28 h-28 rounded-full opacity-20 blur-xl pointer-events-none"
+              [class]="theme.type === 'sunny' ? 'bg-amber-400' : (theme.type === 'rainy' ? 'bg-sky-400' : 'bg-slate-400')"
+            ></div>
+
+            <div class="relative z-10 flex items-center justify-between gap-3">
+              <!-- Left: Animated Weather Illustration + Temperature + Description -->
+              <div class="flex items-center gap-3 min-w-0">
+                <!-- Animated SVG Icon Box -->
+                <div class="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl shrink-0 flex items-center justify-center relative overflow-hidden bg-white/80 shadow-xs border border-white/90">
+                  @switch (theme.type) {
+                    @case ('sunny') {
+                      <!-- Animated Sun with rotating rays and pulsing warm halo -->
+                      <svg class="w-9 h-9 sm:w-10 sm:h-10 text-amber-500" viewBox="0 0 48 48" fill="none">
+                        <g class="animate-weather-sun-spin" stroke="#F59E0B" stroke-width="2.5" stroke-linecap="round">
+                          <line x1="24" y1="4" x2="24" y2="8" />
+                          <line x1="24" y1="40" x2="24" y2="44" />
+                          <line x1="4" y1="24" x2="8" y2="24" />
+                          <line x1="40" y1="24" x2="44" y2="24" />
+                          <line x1="9.86" y1="9.86" x2="12.69" y2="12.69" />
+                          <line x1="35.31" y1="35.31" x2="38.14" y2="38.14" />
+                          <line x1="9.86" y1="38.14" x2="12.69" y2="35.31" />
+                          <line x1="35.31" y1="12.69" x2="38.14" y2="9.86" />
+                        </g>
+                        <circle cx="24" cy="24" r="11" fill="#FBBF24" class="animate-weather-sun-pulse" />
+                        <circle cx="24" cy="24" r="8" fill="#F59E0B" />
+                      </svg>
+                    }
+                    @case ('partlyCloudy') {
+                      <!-- Peeking sun and floating cloud -->
+                      <svg class="w-10 h-10 sm:w-11 sm:h-11" viewBox="0 0 48 48" fill="none">
+                        <circle cx="30" cy="18" r="8" fill="#FBBF24" class="animate-weather-sun-pulse" />
+                        <path d="M12 36 A8 8 0 0 1 19 23 A10 10 0 0 1 36 26 A7 7 0 0 1 35 36 Z"
+                              fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.5" class="animate-weather-cloud" />
+                      </svg>
+                    }
+                    @case ('cloudy') {
+                      <!-- Layered drifting clouds -->
+                      <svg class="w-10 h-10 sm:w-11 sm:h-11" viewBox="0 0 48 48" fill="none">
+                        <path d="M17 28 A7 7 0 0 1 22 18 A9 9 0 0 1 37 21 A6 6 0 0 1 36 28 Z"
+                              fill="#E2E8F0" class="animate-weather-cloud-slow" />
+                        <path d="M11 36 A7 7 0 0 1 17 24 A9 9 0 0 1 33 27 A6 6 0 0 1 32 36 Z"
+                              fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.5" class="animate-weather-cloud" />
+                      </svg>
+                    }
+                    @case ('rainy') {
+                      <!-- Cloud with animated raindrops -->
+                      <svg class="w-10 h-10 sm:w-11 sm:h-11" viewBox="0 0 48 48" fill="none">
+                        <path d="M12 28 A7 7 0 0 1 18 16 A9 9 0 0 1 34 19 A6 6 0 0 1 33 28 Z"
+                              fill="#E0F2FE" stroke="#7DD3FC" stroke-width="1.5" class="animate-weather-cloud" />
+                        <line x1="16" y1="31" x2="14" y2="37" stroke="#0284C7" stroke-width="2" stroke-linecap="round" class="animate-weather-rain-1" />
+                        <line x1="23" y1="31" x2="21" y2="37" stroke="#0284C7" stroke-width="2" stroke-linecap="round" class="animate-weather-rain-2" />
+                        <line x1="30" y1="31" x2="28" y2="37" stroke="#0284C7" stroke-width="2" stroke-linecap="round" class="animate-weather-rain-3" />
+                      </svg>
+                    }
+                    @case ('snowy') {
+                      <!-- Cloud with animated snowflakes -->
+                      <svg class="w-10 h-10 sm:w-11 sm:h-11" viewBox="0 0 48 48" fill="none">
+                        <path d="M12 28 A7 7 0 0 1 18 16 A9 9 0 0 1 34 19 A6 6 0 0 1 33 28 Z"
+                              fill="#EFF6FF" stroke="#BFDBFE" stroke-width="1.5" class="animate-weather-cloud" />
+                        <circle cx="16" cy="34" r="1.5" fill="#3B82F6" class="animate-weather-rain-1" />
+                        <circle cx="23" cy="35" r="1.5" fill="#3B82F6" class="animate-weather-rain-2" />
+                        <circle cx="30" cy="34" r="1.5" fill="#3B82F6" class="animate-weather-rain-3" />
+                      </svg>
+                    }
+                    @default {
+                      <!-- Misty wave lines -->
+                      <svg class="w-10 h-10 sm:w-11 sm:h-11" viewBox="0 0 48 48" fill="none">
+                        <path d="M10 20 L38 20" stroke="#94A3B8" stroke-width="2.5" stroke-linecap="round" class="animate-weather-mist" />
+                        <path d="M14 26 L34 26" stroke="#64748B" stroke-width="2.5" stroke-linecap="round" class="animate-weather-mist" style="animation-delay: 0.4s" />
+                        <path d="M12 32 L36 32" stroke="#94A3B8" stroke-width="2.5" stroke-linecap="round" class="animate-weather-mist" style="animation-delay: 0.8s" />
+                      </svg>
+                    }
+                  }
+                </div>
+
+                <!-- Weather Details: Temperature, apparent temp, condition description -->
+                <div class="min-w-0">
+                  <div class="flex items-baseline gap-1.5">
+                    <span class="text-2xl sm:text-3xl font-black tracking-tight leading-none" [class]="theme.textPrimary">
+                      {{ weather.temperature }}°C
+                    </span>
+                    <span class="text-[11px] font-semibold opacity-75 hidden sm:inline" [class]="theme.textSecondary">
+                      (Gefühlt {{ weather.apparentTemperature }}°C)
+                    </span>
+                  </div>
+                  <div class="text-xs sm:text-sm font-bold truncate leading-tight pt-1" [class]="theme.textPrimary">
+                    {{ weather.description }}
+                  </div>
+                  <div class="text-[11px] font-semibold truncate opacity-80" [class]="theme.textSecondary">
+                    Wetter am Zielort {{ weather.cityName }}
+                  </div>
+                </div>
+              </div>
+
+              <!-- Right: Micro-Metrics & Refresh Button -->
+              <div class="flex items-center gap-2 shrink-0">
+                <!-- Humidity & Wind Micro-Pill -->
+                <div
+                  class="hidden sm:flex flex-col items-end text-[11px] font-semibold leading-tight px-2.5 py-1 rounded-xl border shadow-2xs"
+                  [class]="theme.badgeBg + ' ' + theme.badgeBorder + ' ' + theme.textSecondary"
+                >
+                  <span class="flex items-center gap-1">
+                    <span class="mat-icon text-xs text-[#0284C7]">water_drop</span>
+                    <span>{{ weather.humidity }}%</span>
+                  </span>
+                  <span class="flex items-center gap-1 opacity-85">
+                    <span class="mat-icon text-xs">air</span>
+                    <span>{{ weather.windSpeedKmH }} km/h</span>
+                  </span>
+                </div>
+
+                <!-- Sleek Weather Refresh Button -->
+                <button
+                  type="button"
+                  id="btn-refresh-weather-showcase"
+                  (click)="refreshDestinationWeather($event)"
+                  [disabled]="isWeatherLoading()"
+                  class="w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center transition-all cursor-pointer disabled:opacity-50 shadow-2xs border hover:scale-105 active:scale-95"
+                  [class]="theme.badgeBg + ' ' + theme.badgeBorder + ' ' + theme.textPrimary"
+                  title="Wetterdaten für {{ weather.cityName }} aktualisieren"
+                  aria-label="Wetterdaten für {{ weather.cityName }} aktualisieren"
+                >
+                  <span class="mat-icon text-base" [class.animate-spin]="isWeatherLoading()">refresh</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        } @else if (isWeatherLoading()) {
+          <!-- Shimmering Loading State -->
+          <div class="w-full rounded-2xl p-4 border border-[#E6DED6] bg-linear-to-r from-[#FAF7F2] to-[#F5EFE6] shadow-2xs animate-pulse flex items-center justify-between gap-3">
+            <div class="flex items-center gap-3 min-w-0">
+              <div class="w-12 h-12 rounded-xl bg-[#E6DED6]/70 shrink-0 flex items-center justify-center">
+                <span class="mat-icon text-lg text-[#795548] animate-spin">refresh</span>
+              </div>
+              <div class="space-y-1.5">
+                <div class="h-5 w-24 bg-[#E6DED6]/80 rounded-md"></div>
+                <div class="h-3.5 w-44 bg-[#E6DED6]/60 rounded-md"></div>
+              </div>
+            </div>
+            <div class="text-xs font-semibold text-[#795548] pr-2">
+              Wetter lädt…
+            </div>
+          </div>
+        }
+
+        <!-- FULL-WIDTH "TICKET KAUFEN" ACTION BUTTON -->
         <button
           type="button"
           id="btn-buy-ticket-action"
           (click)="openTicketModal()"
-          class="w-full py-3 px-4 rounded-full border-2 border-[#1F1612] bg-white hover:bg-[#FAF7F2] active:bg-[#F0ECE1] text-[#1F1612] font-black text-sm sm:text-base tracking-wide shadow-2xs transition-colors cursor-pointer text-center flex items-center justify-center gap-2"
+          class="w-full py-3 px-4 rounded-2xl border-2 border-[#1F1612] bg-[#1F1612] text-white hover:bg-[#33251D] active:scale-[0.99] font-black text-sm sm:text-base tracking-wide shadow-xs transition-all cursor-pointer text-center flex items-center justify-center gap-2"
         >
-          <span class="mat-icon text-lg">confirmation_number</span>
+          <span class="mat-icon text-lg text-white">confirmation_number</span>
           <span>Ticket kaufen</span>
         </button>
-      </div>
-
-      <!-- ========================================================= -->
-      <!-- 3. MAIN SCROLLABLE TIMELINE (CONNECTIONS & TRANSIT STEPS) -->
-      <!-- ========================================================= -->
-      <main class="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-4 select-text">
 
         <!-- STEP 0: START WALKING SECTION -->
         <div
           class="flex items-start gap-4 p-2 rounded-2xl transition-colors cursor-pointer hover:bg-[#FAF7F2]"
-          (click)="goToStep(0)"
+          (click)="focusWalkOnMap()"
           role="button"
           tabindex="0"
-          title="Auf der Karte anzeigen"
+          title="Fußweg zum Startbahnhof auf der Karte anzeigen"
           aria-label="Fußweg zum Startbahnhof auf der Karte anzeigen"
         >
           <!-- Left column: Start time & vertical dotted connector -->
@@ -245,10 +470,17 @@
               Start
             </div>
 
-            <div class="flex items-center gap-2 text-sm sm:text-base font-semibold text-[#1F1612] pt-1">
-              <span class="mat-icon text-lg text-[#1F1612]">directions_walk</span>
-              <span>Gehe {{ getWalkDistanceMeters(journey) }} Meter ({{ getFirstWalkMinutes(journey) }} min)</span>
-            </div>
+            <button
+              type="button"
+              (click)="focusWalkOnMap(); $event.stopPropagation()"
+              class="inline-flex items-center gap-2 text-sm sm:text-base font-semibold text-[#1F1612] pt-1 hover:text-[#1B4332] transition-colors cursor-pointer group"
+              title="Fußweg zum Startbahnhof auf der Karte anzeigen"
+              aria-label="Fußweg zum Startbahnhof auf der Karte anzeigen"
+            >
+              <span class="mat-icon text-lg text-[#1B4332] group-hover:scale-110 transition-transform">directions_walk</span>
+              <span class="underline decoration-dotted decoration-[#1B4332]/40 underline-offset-2">Gehe {{ getWalkDistanceMeters(journey) }} Meter ({{ getFirstWalkMinutes(journey) }} min)</span>
+              <span class="mat-icon text-xs text-[#2D6A4F] opacity-70 group-hover:opacity-100">map</span>
+            </button>
           </div>
         </div>
 
@@ -538,13 +770,44 @@
             </span>
           </div>
 
-          <!-- Right column: Destination address & Ziel label -->
-          <div class="flex-1 min-w-0 pt-0.5 space-y-0.5">
+          <!-- Right column: Destination address & Ziel label + Weather chip -->
+          <div class="flex-1 min-w-0 pt-0.5 space-y-1">
             <div class="text-base sm:text-lg font-bold text-[#1F1612] leading-snug">
               {{ journey.destination.name }}
             </div>
-            <div class="text-xs sm:text-sm text-[#757575] font-normal">
-              Ziel
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="text-xs sm:text-sm text-[#757575] font-normal">
+                Ziel
+              </span>
+
+              @if (destinationWeather(); as weather) {
+                <div
+                  id="journey-destination-weather-ziel"
+                  class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#FAF7F2] border border-[#E6DED6] text-xs font-semibold text-[#1F1612] shadow-2xs"
+                  title="Wetter am Zielort {{ weather.cityName }}: {{ weather.description }}"
+                >
+                  <span class="text-sm leading-none" aria-hidden="true">{{ weather.icon }}</span>
+                  <span>{{ weather.temperature }}°C</span>
+                  <span class="text-[#795548] font-normal">{{ weather.description }}</span>
+                  <!-- Small Refresh Button -->
+                  <button
+                    type="button"
+                    id="btn-refresh-destination-weather-ziel"
+                    (click)="refreshDestinationWeather($event)"
+                    [disabled]="isWeatherLoading()"
+                    class="w-4 h-4 rounded-full hover:bg-[#E6DED6] active:scale-95 flex items-center justify-center text-[#795548] hover:text-[#1F1612] transition-colors cursor-pointer disabled:opacity-50 ml-0.5"
+                    title="Wetter für {{ weather.cityName }} aktualisieren"
+                    aria-label="Wetterdaten für {{ weather.cityName }} neu laden"
+                  >
+                    <span class="mat-icon text-[11px] leading-none" [class.animate-spin]="isWeatherLoading()">refresh</span>
+                  </button>
+                </div>
+              } @else if (isWeatherLoading()) {
+                <div class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#FAF7F2] border border-[#E6DED6] text-xs text-[#795548] animate-pulse">
+                  <span class="mat-icon text-xs animate-spin">refresh</span>
+                  <span>Wetter lädt…</span>
+                </div>
+              }
             </div>
           </div>
         </div>
@@ -563,6 +826,58 @@
       </main>
 
     </div>
+
+    <!-- ============================================================== -->
+    <!-- FLOATING MINIATURE MAP PREVIEW WIDGET (60% SMALLER & COMPACT)  -->
+    <!-- Positioned lower down, displays miniature map preview graphic  -->
+    <!-- ============================================================== -->
+    @if (sheetHeightPercent() >= 45) {
+      <div class="fixed bottom-3 right-3 z-[500] pointer-events-auto">
+        <button
+          type="button"
+          id="btn-miniature-map-preview"
+          (click)="snapTo('map')"
+          class="group bg-white/95 hover:bg-white text-[#1F1612] rounded-lg shadow-md border border-[#1F1612]/20 hover:border-[#1F1612] p-1 flex items-center gap-1.5 cursor-pointer transition-all hover:scale-105 active:scale-95 backdrop-blur-md"
+          title="Karte in voller Größe anzeigen"
+          aria-label="Zurück zur Karte wechseln"
+        >
+          <!-- Miniature Vector Graphic (60% smaller: 22px / w-[22px] h-[22px]) -->
+          <div class="w-[22px] h-[22px] rounded-md overflow-hidden relative bg-[#E9E4DC] border border-black/15 shrink-0 shadow-inner flex items-center justify-center">
+            <!-- Simulated Miniature Vector Map -->
+            <svg class="absolute inset-0 w-full h-full" viewBox="0 0 64 64" fill="none" preserveAspectRatio="none">
+              <!-- Water body -->
+              <path d="M0 44 C20 40, 32 50, 64 42 L64 64 L0 64 Z" fill="#90CAF9" />
+              <!-- Streets -->
+              <path d="M0 18 L64 18" stroke="#FFFFFF" stroke-width="3" />
+              <path d="M22 0 L22 64" stroke="#FFFFFF" stroke-width="3" />
+              <path d="M48 0 L48 64" stroke="#FFFFFF" stroke-width="2.5" />
+              <!-- Transit Route -->
+              <path d="M8 26 Q24 20, 36 34 T56 22" stroke="#1B4332" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
+              <path d="M8 26 Q24 20, 36 34 T56 22" stroke="#52B788" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+
+            <!-- Origin green dot -->
+            <div class="absolute left-0.5 top-2 w-1 h-1 rounded-full bg-[#1B4332]"></div>
+
+            <!-- Destination red pin -->
+            <div class="absolute right-0.5 top-1 z-10 flex flex-col items-center">
+              <span class="w-1.5 h-1.5 rounded-full bg-[#D62828] border border-white"></span>
+            </div>
+          </div>
+
+          <!-- Label and expand icon (super compact) -->
+          <div class="pr-0.5 text-left leading-none">
+            <div class="text-[10px] font-black text-[#1F1612] flex items-center gap-0.5 group-hover:text-[#1B4332] transition-colors leading-none">
+              <span>Karte</span>
+              <span class="mat-icon text-[11px] leading-none">open_in_full</span>
+            </div>
+            <div class="text-[8px] text-[#757575] font-semibold leading-none pt-0.5">
+              Groß
+            </div>
+          </div>
+        </button>
+      </div>
+    }
 
     <!-- ============================================================== -->
     <!-- 4. TICKET PURCHASE MODAL (When clicking "Ticket kaufen")        -->
