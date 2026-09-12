@@ -70,191 +70,254 @@ interface CuratedDestination {
         
         <!-- LEFT COLUMN: Minimalist Connection Planner & Direct Results underneath -->
         <div class="lg:col-span-7 space-y-5">
-          <!-- CARD 1: Minimalist Connection Planner (DB Navigator style clean layout) -->
-          <div class="relative bg-white rounded-xl p-4 sm:p-5 pt-5 sm:pt-6 border border-[#E6DED6] shadow-xs space-y-4">
+          <!-- CARD 1: Minimalist Connection Planner (White container as unified background - maximum width & space) -->
+          <div id="planner-card" class="relative bg-white rounded-2xl border border-[#E6DED6] shadow-xs overflow-visible z-30">
           
-          <!-- Floating Eco Badge with negative margin sitting over the rounded top-left corner border -->
-          <div class="absolute -top-3 left-4 inline-flex items-center gap-1 px-2.5 py-0.5 bg-white border border-[#B7E4C7] rounded-full shadow-2xs z-10 select-none">
-            <span class="mat-icon text-[16px] text-[#2D6A4F] transform scale-120 inline-block">eco</span>
-            <span class="tracking-wide text-[11px] font-black uppercase text-[#1B4332]">-80% CO₂ vs. Pkw</span>
-          </div>
+            <!-- Eco Badge: centered horizontally in the middle of the main container and floating right on the top line -->
+            <div class="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 inline-flex items-center gap-1.5 px-3 py-0.5 bg-white rounded-full shadow-xs z-20 select-none pointer-events-none">
+              <span class="mat-icon text-[13px] text-[#2D6A4F] leading-none">eco</span>
+              <span class="tracking-wider text-[10px] font-black uppercase text-[#2D6A4F] leading-none">-80% CO₂ vs. Pkw</span>
+            </div>
 
-          <!-- Form Area -->
-          <form [formGroup]="searchForm" (ngSubmit)="onSearchSubmit()" class="space-y-3.5">
-            
-            <!-- DB-style Clean Station Inputs with vertical swap connector -->
-            <div class="relative bg-[#FAF7F2] p-2.5 sm:p-3 rounded-xl border border-[#E6DED6]">
-              <div class="relative space-y-2.5">
-                <!-- Start Station (Clean with placeholder, no redundant 'Von' label) -->
-                <div>
-                  <app-station-input
-                    [showLabel]="false"
-                    label=""
-                    placeholder="Von (Startbahnhof oder Haltestelle)"
-                    iconName="trip_origin"
-                    inputId="input-from-station"
-                    [initialStation]="fromStation()"
-                    [allowCurrentLocation]="true"
-                    [isCursorActive]="activeInput() === 'from'"
-                    (stationChange)="onFromStationChange($event)"
-                    (queryChange)="fromStationQuery.set($event)"
-                    (inputFocus)="activeInput.set('from')"
-                  ></app-station-input>
+            <!-- Form Area spanning full width of the white card -->
+            <form [formGroup]="searchForm" (ngSubmit)="onSearchSubmit()" class="w-full">
+              
+              <!-- Route inputs section directly on the white background (no nested borders/margins) -->
+              <div class="p-3 sm:p-4 pb-2.5 relative w-full">
+                <div class="flex items-stretch relative">
+                  
+                  <!-- Left route indicator rail (Google Maps style) -->
+                  <div class="w-8 sm:w-9 flex flex-col items-center pt-3 pb-3 shrink-0 select-none pointer-events-none mr-1.5 sm:mr-2">
+                    <!-- Origin marker: Green circle -->
+                    <div class="w-3.5 h-3.5 rounded-full border-2 border-[#2D6A4F] bg-white shrink-0 shadow-2xs"></div>
+                    
+                    <!-- Intermediate line + via stop dots if any -->
+                    @if (viaStations().length > 0) {
+                      @for (via of viaStations(); track via.id) {
+                        <div class="w-0.5 flex-1 min-h-[14px] bg-[#D7CCC8] my-1"></div>
+                        <div class="w-3 h-3 rounded-full border-2 border-[#D97706] bg-white shrink-0 shadow-2xs" title="Zwischenhalt"></div>
+                      }
+                    }
+                    <div class="w-0.5 flex-1 min-h-[18px] bg-[#D7CCC8] my-1"></div>
+                    
+                    <!-- Destination marker: Dark pin/square -->
+                    <div class="w-3.5 h-3.5 rounded-xs bg-[#1F1612] shrink-0 shadow-2xs flex items-center justify-center">
+                      <div class="w-1 h-1 bg-white rounded-full"></div>
+                    </div>
+                  </div>
+
+                  <!-- Text inputs container reaching cleanly edge-to-edge -->
+                  <div class="flex-1 min-w-0 pr-10 sm:pr-12">
+                    <!-- Start Station (Flush) -->
+                    <div>
+                      <app-station-input
+                        [variant]="'flush'"
+                        [showLabel]="false"
+                        label=""
+                        placeholder="Von (Startbahnhof oder Haltestelle)"
+                        iconName=""
+                        inputId="input-from-station"
+                        [initialStation]="fromStation()"
+                        [allowCurrentLocation]="true"
+                        [isCursorActive]="activeInput() === 'from'"
+                        matchContainerSelector="#planner-card"
+                        (stationChange)="onFromStationChange($event)"
+                        (queryChange)="fromStationQuery.set($event)"
+                        (inputFocus)="activeInput.set('from')"
+                      ></app-station-input>
+                    </div>
+
+                    <!-- Subtle hairline divider -->
+                    <div class="h-px bg-[#EFEBE6] w-full my-0.5"></div>
+
+                    <!-- Intermediate stations (Via) -->
+                    @for (via of viaStations(); track via.id; let idx = $index) {
+                      <div class="relative flex items-center">
+                        <div class="flex-1 min-w-0">
+                          <app-station-input
+                            [variant]="'flush'"
+                            [showLabel]="false"
+                            label=""
+                            [placeholder]="'Zwischenhalt ' + (viaStations().length > 1 ? (idx + 1) : '') + ' (Bahnhof oder Ort)'"
+                            iconName=""
+                            [inputId]="'input-via-' + via.id"
+                            [initialStation]="via.station"
+                            [allowCurrentLocation]="false"
+                            [isCursorActive]="activeInput() === via.id"
+                            matchContainerSelector="#planner-card"
+                            (stationChange)="onViaStationChange(via.id, $event)"
+                            (queryChange)="onViaQueryChange(via.id, $event)"
+                            (inputFocus)="activeInput.set(via.id)"
+                          ></app-station-input>
+                        </div>
+                        <button
+                          type="button"
+                          (click)="removeViaStation(via.id)"
+                          class="w-7 h-7 rounded-full flex items-center justify-center text-[#8D6E63] hover:text-[#B91C1C] hover:bg-[#FEE2E2] transition-colors cursor-pointer mr-1 shrink-0"
+                          title="Zwischenhalt entfernen"
+                          aria-label="Zwischenhalt entfernen"
+                        >
+                          <span class="mat-icon text-base">close</span>
+                        </button>
+                      </div>
+                      <div class="h-px bg-[#EFEBE6] w-full my-0.5"></div>
+                    }
+
+                    <!-- Destination Station (Flush) -->
+                    <div>
+                      <app-station-input
+                        [variant]="'flush'"
+                        [showLabel]="false"
+                        label=""
+                        placeholder="Nach (Zielbahnhof oder Ort)"
+                        iconName=""
+                        inputId="input-to-station"
+                        [initialStation]="toStation()"
+                        [allowCurrentLocation]="false"
+                        [isCursorActive]="activeInput() === 'to'"
+                        matchContainerSelector="#planner-card"
+                        (stationChange)="onToStationChange($event)"
+                        (queryChange)="toStationQuery.set($event)"
+                        (inputFocus)="activeInput.set('to')"
+                      ></app-station-input>
+                    </div>
+                  </div>
+
+                  <!-- Right Column Controls: Swap button and subtle Add Via Station button directly below it -->
+                  <div class="absolute right-1.5 sm:right-2 top-1/2 -translate-y-1/2 flex flex-col items-center gap-1 z-20">
+                    <!-- Swap Stations button -->
+                    <button
+                      type="button"
+                      id="btn-swap-stations"
+                      (click)="swapStations()"
+                      class="group w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white hover:bg-[#EDF9F0] text-[#2D6A4F] hover:text-[#1B4332] flex items-center justify-center cursor-pointer transition-all duration-200 shadow-2xs hover:shadow-xs border border-[#E0D7D0] hover:border-[#2D6A4F] active:scale-95 focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]/40"
+                      title="Start und Ziel tauschen"
+                      aria-label="Start- und Zielbahnhof tauschen"
+                    >
+                      <span class="mat-icon text-base text-[#2D6A4F] group-hover:text-[#1B4332] transition-transform duration-300 group-hover:rotate-180 group-active:rotate-180 select-none" aria-hidden="true">swap_vert</span>
+                    </button>
+
+                    <!-- Add Via Station: subtle icon button directly below swap, no label, no margin -->
+                    <button
+                      type="button"
+                      id="btn-add-via-station"
+                      (click)="addViaStation()"
+                      class="w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center text-[#8D6E63] hover:text-[#2D6A4F] hover:bg-[#EDF9F0] transition-colors cursor-pointer border border-transparent hover:border-[#D7CCC8] active:scale-95 focus:outline-none focus:ring-1 focus:ring-[#2D6A4F]/30"
+                    >
+                      <span class="mat-icon text-base leading-none" aria-hidden="true">add_circle_outline</span>
+                    </button>
+                  </div>
                 </div>
+              </div>
 
-                <!-- Subtle separator line -->
-                <div class="h-px bg-[#E6DED6] mx-2"></div>
-
-                <!-- Destination Station (Clean with placeholder, no redundant 'Nach' label) -->
-                <div>
-                  <app-station-input
-                    [showLabel]="false"
-                    label=""
-                    placeholder="Nach (Zielbahnhof oder Ort)"
-                    iconName="place"
-                    inputId="input-to-station"
-                    [initialStation]="toStation()"
-                    [allowCurrentLocation]="false"
-                    [isCursorActive]="activeInput() === 'to'"
-                    (stationChange)="onToStationChange($event)"
-                    (queryChange)="toStationQuery.set($event)"
-                    (inputFocus)="activeInput.set('to')"
-                  ></app-station-input>
-                </div>
-
-                <!-- DB-Style Floating Swap Button: montado armónicamente sobre las dos cajas de texto a la derecha -->
+              <!-- Dein Standort (Seamless section inside the white card) -->
+              <div
+                class="border-t border-[#EFEBE6] bg-[#FAF7F2]/60 hover:bg-[#EDF9F0] px-3 sm:px-4 py-2 flex items-center justify-between gap-2.5 transition-colors"
+                [class.bg-[#EDF9F0]]="standortActionState() === 'success'"
+                [class.bg-[#FFFBEB]]="standortActionState() === 'gps-warning'"
+              >
                 <button
                   type="button"
-                  id="btn-swap-stations"
-                  (click)="swapStations()"
-                  class="group absolute right-3.5 sm:right-4 top-1/2 -translate-y-1/2 w-[38px] h-[38px] rounded-full bg-white hover:bg-[#EDF9F0] text-[#2D6A4F] hover:text-[#1B4332] flex items-center justify-center cursor-pointer transition-all duration-200 shadow-xs hover:shadow-md border border-[#E0D7D0] hover:border-[#2D6A4F] ring-[3.5px] ring-[#FAF7F2] active:scale-95 focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]/40 z-20"
-                  title="Start und Ziel tauschen"
-                  aria-label="Start- und Zielbahnhof tauschen"
+                  id="btn-standort-to-origin"
+                  (click)="applyStandortToOrigin()"
+                  class="flex items-center gap-2.5 min-w-0 flex-1 text-left cursor-pointer group active:scale-[0.99] transition-transform"
+                  title="Aktuellen Standort als Startbahnhof (Von) übernehmen"
+                  aria-label="Deinen aktuellen Standort als Startbahnhof übernehmen"
                 >
-                  <span class="mat-icon text-lg text-[#2D6A4F] group-hover:text-[#1B4332] transition-transform duration-300 group-hover:rotate-180 group-active:rotate-180 select-none" aria-hidden="true">swap_vert</span>
+                  <div
+                    class="w-7 h-7 rounded-md flex items-center justify-center shrink-0 transition-colors shadow-2xs"
+                    [class.bg-[#EDF9F0]]="standortActionState() === 'idle' || standortActionState() === 'locating'"
+                    [class.text-[#2D6A4F]]="standortActionState() === 'idle' || standortActionState() === 'locating'"
+                    [class.group-hover:bg-[#2D6A4F]]="standortActionState() === 'idle'"
+                    [class.group-hover:text-white]="standortActionState() === 'idle'"
+                    [class.bg-[#1B4332]]="standortActionState() === 'success'"
+                    [class.text-white]="standortActionState() === 'success'"
+                    [class.bg-[#FDE68A]]="standortActionState() === 'gps-warning'"
+                    [class.text-[#92400E]]="standortActionState() === 'gps-warning'"
+                    aria-hidden="true"
+                  >
+                    @if (standortActionState() === 'locating' || transitService.isLocating()) {
+                      <span class="mat-icon text-xs animate-spin">sync</span>
+                    } @else if (standortActionState() === 'success') {
+                      <span class="mat-icon text-sm">check_circle</span>
+                    } @else if (standortActionState() === 'gps-warning') {
+                      <span class="mat-icon text-sm">location_disabled</span>
+                    } @else {
+                      <span class="mat-icon text-sm">my_location</span>
+                    }
+                  </div>
+
+                  <div class="min-w-0 flex-1">
+                    <div class="text-xs font-bold text-[#1F1612] group-hover:text-[#1B4332] transition-colors flex items-center gap-1.5 truncate">
+                      <span>Dein Standort</span>
+                      @if (standortActionState() === 'success') {
+                        <span class="inline-flex items-center px-1.5 py-0.2 text-[9px] font-black bg-[#2D6A4F] text-white rounded">Übernommen ✓</span>
+                      } @else if (standortActionState() === 'gps-warning') {
+                        <span class="inline-flex items-center px-1.5 py-0.2 text-[9px] font-black bg-[#D97706] text-white rounded">GPS prüfen</span>
+                      }
+                    </div>
+                    <div class="text-[11px] truncate text-[#795548] font-light">
+                      @if (standortActionState() === 'locating' || transitService.isLocating()) {
+                        <span class="text-[#2D6A4F] font-semibold animate-pulse">GPS-Signal wird abgefragt...</span>
+                      } @else if (standortActionState() === 'success') {
+                        <span class="text-[#1B4332] font-semibold">{{ currentStreetAndNumber() }} • Ziel eingeben</span>
+                      } @else if (standortActionState() === 'gps-warning') {
+                        <span class="text-[#B45309] font-medium">GPS ausgeschaltet oder blockiert • Tippen zum Aktivieren</span>
+                      } @else {
+                        <span>{{ currentFullAddress() }}</span>
+                      }
+                    </div>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  id="btn-view-standort-map"
+                  (click)="openStandortMap()"
+                  class="w-7 h-7 rounded-md bg-[#FAF7F2] hover:bg-[#EDF9F0] text-[#795548] hover:text-[#2D6A4F] border border-[#E6DED6] hover:border-[#2D6A4F] flex items-center justify-center cursor-pointer transition-all shrink-0 shadow-2xs"
+                  title="Standort auf Karte anzeigen"
+                  aria-label="Deinen aktuellen Standort auf der Karte visualisieren"
+                >
+                  <span class="mat-icon text-sm" aria-hidden="true">map</span>
                 </button>
               </div>
 
-              <!-- 1rem Contenedor: Dein Standort (Aktueller Standort mit vollständiger Adresse) + Karten-Icon mit Rückkehroption -->
-              <div
-                class="mt-3.5 p-3 rounded-xl border transition-all duration-200 shadow-2xs"
-                [class.bg-white]="standortActionState() === 'idle'"
-                [class.border-[#E6DED6]]="standortActionState() === 'idle'"
-                [class.hover:border-[#2D6A4F]]="standortActionState() === 'idle'"
-                [class.bg-[#EDF9F0]]="standortActionState() === 'success'"
-                [class.border-[#2D6A4F]]="standortActionState() === 'success' || standortActionState() === 'locating'"
-                [class.ring-2]="standortActionState() === 'success' || standortActionState() === 'locating'"
-                [class.ring-[#2D6A4F]/25]="standortActionState() === 'success' || standortActionState() === 'locating'"
-                [class.bg-[#FFFBEB]]="standortActionState() === 'gps-warning'"
-                [class.border-[#D97706]]="standortActionState() === 'gps-warning'"
-              >
-                <div class="flex items-center justify-between gap-3">
-                  <!-- Klickbereich: Überträgt den aktuellen Standort in 'Von' (Startbahnhof) -->
-                  <button
-                    type="button"
-                    id="btn-standort-to-origin"
-                    (click)="applyStandortToOrigin()"
-                    class="flex items-center gap-3 min-w-0 flex-1 text-left cursor-pointer group py-0.5 active:scale-[0.98] transition-transform"
-                    title="Aktuellen Standort als Startbahnhof (Von) übernehmen"
-                    aria-label="Deinen aktuellen Standort als Startbahnhof übernehmen"
-                  >
-                    <!-- Icono a la izquierda en una sola columna -->
-                    <div
-                      class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-colors shadow-2xs"
-                      [class.bg-[#EDF9F0]]="standortActionState() === 'idle' || standortActionState() === 'locating'"
-                      [class.text-[#2D6A4F]]="standortActionState() === 'idle' || standortActionState() === 'locating'"
-                      [class.group-hover:bg-[#2D6A4F]]="standortActionState() === 'idle'"
-                      [class.group-hover:text-white]="standortActionState() === 'idle'"
-                      [class.bg-[#1B4332]]="standortActionState() === 'success'"
-                      [class.text-white]="standortActionState() === 'success'"
-                      [class.bg-[#FDE68A]]="standortActionState() === 'gps-warning'"
-                      [class.text-[#92400E]]="standortActionState() === 'gps-warning'"
-                      aria-hidden="true"
-                    >
-                      @if (standortActionState() === 'locating' || transitService.isLocating()) {
-                        <span class="mat-icon text-base animate-spin">sync</span>
-                      } @else if (standortActionState() === 'success') {
-                        <span class="mat-icon text-lg">check_circle</span>
-                      } @else if (standortActionState() === 'gps-warning') {
-                        <span class="mat-icon text-lg">location_disabled</span>
-                      } @else {
-                        <span class="mat-icon text-lg">my_location</span>
-                      }
-                    </div>
-
-                    <!-- Dos filas: 1. Fija 'Dein Standort', 2. Dirección completa -->
-                    <div class="min-w-0 truncate">
-                      <div class="text-[13px] font-bold text-[#1F1612] group-hover:text-[#1B4332] transition-colors flex items-center gap-1.5">
-                        <span>Dein Standort</span>
-                        @if (standortActionState() === 'success') {
-                          <span class="inline-flex items-center px-1.5 py-0.2 text-[10px] font-extrabold bg-[#2D6A4F] text-white rounded-md">Übernommen ✓</span>
-                        } @else if (standortActionState() === 'gps-warning') {
-                          <span class="inline-flex items-center px-1.5 py-0.2 text-[10px] font-extrabold bg-[#D97706] text-white rounded-md">GPS prüfen</span>
-                        }
-                      </div>
-                      <div class="text-[11px] truncate mt-0.5" [title]="currentFullAddress()">
-                        @if (standortActionState() === 'locating' || transitService.isLocating()) {
-                          <span class="text-[#2D6A4F] font-semibold animate-pulse">GPS-Signal wird abgefragt...</span>
-                        } @else if (standortActionState() === 'success') {
-                          <span class="text-[#1B4332] font-semibold">{{ currentStreetAndNumber() }} • Ziel eingeben</span>
-                        } @else if (standortActionState() === 'gps-warning') {
-                          <span class="text-[#B45309] font-medium">GPS ausgeschaltet oder blockiert • Tippen zum Aktivieren</span>
-                        } @else {
-                          <span class="text-[#795548] font-light">{{ currentFullAddress() }}</span>
-                        }
-                      </div>
-                    </div>
-                  </button>
-
-                  <!-- Icono para visualizar en el mapa tu aktuelle standort, con opción a regresar -->
-                  <button
-                    type="button"
-                    id="btn-view-standort-map"
-                    (click)="openStandortMap()"
-                    class="w-9 h-9 rounded-lg bg-[#FAF7F2] hover:bg-[#EDF9F0] text-[#795548] hover:text-[#2D6A4F] border border-[#E6DED6] hover:border-[#2D6A4F] flex items-center justify-center cursor-pointer transition-all shrink-0 shadow-2xs"
-                    title="Standort auf Karte anzeigen"
-                    aria-label="Deinen aktuellen Standort auf der Karte visualisieren"
-                  >
-                    <span class="mat-icon text-lg" aria-hidden="true">map</span>
-                  </button>
-                </div>
-
-                <!-- Inline Feedback-Meldung -->
-                @if (standortFeedbackMessage() && standortActionState() !== 'idle') {
-                  <div
-                    class="mt-2.5 pt-2 border-t text-xs flex items-center justify-between gap-2"
-                    [class.border-[#2D6A4F]/20]="standortActionState() === 'success' || standortActionState() === 'locating'"
-                    [class.border-[#D97706]/30]="standortActionState() === 'gps-warning'"
-                  >
-                    <div class="flex items-center gap-1.5 min-w-0 truncate">
-                      @if (standortActionState() === 'locating') {
-                        <span class="mat-icon text-sm animate-spin text-[#2D6A4F]">sync</span>
-                        <span class="text-[#2D6A4F] font-medium truncate">{{ standortFeedbackMessage() }}</span>
-                      } @else if (standortActionState() === 'success') {
-                        <span class="mat-icon text-sm text-[#2D6A4F]">done</span>
-                        <span class="text-[#1B4332] font-semibold truncate">{{ standortFeedbackMessage() }}</span>
-                      } @else if (standortActionState() === 'gps-warning') {
-                        <span class="mat-icon text-sm text-[#D97706]">warning</span>
-                        <span class="text-[#B45309] font-medium truncate">{{ standortFeedbackMessage() }}</span>
-                      }
-                    </div>
-
-                    @if (standortActionState() === 'gps-warning') {
-                      <button
-                        type="button"
-                        (click)="openGpsHelpModal()"
-                        class="px-2 py-0.5 bg-[#D97706] hover:bg-[#B45309] text-white text-[10px] font-bold rounded-md shrink-0 cursor-pointer shadow-2xs"
-                      >
-                        Anleitung
-                      </button>
+              <!-- Inline Feedback-Meldung -->
+              @if (standortFeedbackMessage() && standortActionState() !== 'idle') {
+                <div
+                  class="px-3 sm:px-4 py-1.5 border-t text-xs flex items-center justify-between gap-2 bg-white/95"
+                  [class.border-[#2D6A4F]/20]="standortActionState() === 'success' || standortActionState() === 'locating'"
+                  [class.border-[#D97706]/30]="standortActionState() === 'gps-warning'"
+                >
+                  <div class="flex items-center gap-1.5 min-w-0 truncate">
+                    @if (standortActionState() === 'locating') {
+                      <span class="mat-icon text-xs animate-spin text-[#2D6A4F]">sync</span>
+                      <span class="text-[#2D6A4F] text-[11px] font-medium truncate">{{ standortFeedbackMessage() }}</span>
+                    } @else if (standortActionState() === 'success') {
+                      <span class="mat-icon text-xs text-[#2D6A4F]">done</span>
+                      <span class="text-[#1B4332] text-[11px] font-semibold truncate">{{ standortFeedbackMessage() }}</span>
+                    } @else if (standortActionState() === 'gps-warning') {
+                      <span class="mat-icon text-xs text-[#D97706]">warning</span>
+                      <span class="text-[#B45309] text-[11px] font-medium truncate">{{ standortFeedbackMessage() }}</span>
                     }
                   </div>
-                }
-              </div>
-            </div>
 
-            <!-- Compact Filter Bar: Optionen & Datum/Uhrzeit Button fitting the full width without horizontal scroll -->
-            <div class="flex items-center gap-2 pt-1 w-full">
+                  @if (standortActionState() === 'gps-warning') {
+                    <button
+                      type="button"
+                      (click)="openGpsHelpModal()"
+                      class="px-2 py-0.5 bg-[#D97706] hover:bg-[#B45309] text-white text-[10px] font-bold rounded shrink-0 cursor-pointer shadow-2xs"
+                    >
+                      Anleitung
+                    </button>
+                  }
+                </div>
+              }
+
+              <!-- Bottom Controls: Filter Bar & Options within the white card -->
+              <div class="p-3 sm:p-4 pt-2.5 border-t border-[#EFEBE6] space-y-2.5">
+                <!-- Compact Filter Bar: Optionen & Datum/Uhrzeit Button fitting the full width without horizontal scroll -->
+                <div class="flex items-center gap-2 w-full">
               <!-- Toggle Button to expand/collapse options: Only reads 'Optionen' -->
               <button
                 type="button"
@@ -770,6 +833,8 @@ interface CuratedDestination {
 
               </div>
             }
+
+            </div>
 
           </form>
 
@@ -1299,11 +1364,19 @@ interface CuratedDestination {
                             </div>
                           </div>
 
-                          <!-- 3. Subheader: ab Estación um Hora (live) -->
+                          <!-- 3. Subheader: ab Estación um Hora (live) & Via station badge if present -->
                           @let firstDep = getFirstTransitDeparture(journey);
-                          <div class="text-xs sm:text-sm text-[#795548] font-medium flex items-center gap-1">
-                            <span>ab {{ firstDep.stationName }} um {{ firstDep.time }}</span>
-                            <span class="mat-icon text-xs text-[#795548] leading-none align-middle" aria-hidden="true">sensors</span>
+                          <div class="flex items-center gap-2 flex-wrap">
+                            <div class="text-xs sm:text-sm text-[#795548] font-medium flex items-center gap-1">
+                              <span>ab {{ firstDep.stationName }} um {{ firstDep.time }}</span>
+                              <span class="mat-icon text-xs text-[#795548] leading-none align-middle" aria-hidden="true">sensors</span>
+                            </div>
+                            @if (journey.viaStationName) {
+                              <span class="inline-flex items-center gap-1 text-[10px] font-bold text-[#92400E] bg-[#FEF3C7] border border-[#FDE68A] px-2 py-0.5 rounded-md">
+                                <span class="mat-icon text-xs">alt_route</span>
+                                <span>über {{ journey.viaStationName }}</span>
+                              </span>
+                            }
                           </div>
 
                           <!-- 4. Route Badges: 🚶 28 min ➔ RB71 ➔ S3 ➔ U3 -->
@@ -1962,7 +2035,7 @@ export class PlannerView implements OnInit, AfterViewInit {
   readonly destinationWeather = this.weatherService.currentWeather;
   readonly isWeatherLoading = this.weatherService.isLoading;
 
-  readonly activeInput = signal<'from' | 'to'>('to');
+  readonly activeInput = signal<string>('to');
   readonly showStandortMap = signal<boolean>(false);
 
   // Standort action state and interactive feedback
@@ -1983,6 +2056,7 @@ export class PlannerView implements OnInit, AfterViewInit {
   readonly toStation = signal<Station | null>(null);
   readonly fromStationQuery = signal<string>('Mein Standort');
   readonly toStationQuery = signal<string>('');
+  readonly viaStations = signal<{ id: string; station: Station | null; query: string }[]>([]);
 
   readonly areInputsEmpty = computed(() => {
     const noFrom = !this.fromStation() && !this.fromStationQuery().trim();
@@ -2565,6 +2639,9 @@ export class PlannerView implements OnInit, AfterViewInit {
       this.fromStationQuery.set(station.name);
       this.transitService.recordRecentStation(station);
       this.checkAndTriggerAutoSearch('from');
+    } else if (target.startsWith('via-')) {
+      this.onViaStationChange(target, station);
+      this.transitService.recordRecentStation(station);
     } else {
       this.toStation.set(station);
       this.toStationQuery.set(station.name);
@@ -2642,7 +2719,7 @@ export class PlannerView implements OnInit, AfterViewInit {
    *     - Prüfen, ob das Ziel bereits feststeht: Wenn ja, sofort suchen!
    *     - Falls kein Ziel vorhanden: Fokus auf das Ziel legen.
    */
-  checkAndTriggerAutoSearch(triggerSource: 'from' | 'to') {
+  checkAndTriggerAutoSearch(triggerSource: 'from' | 'to' | 'via') {
     const from = this.fromStation();
     const fromQ = this.fromStationQuery().trim();
     const to = this.toStation();
@@ -2666,6 +2743,10 @@ export class PlannerView implements OnInit, AfterViewInit {
       } else if (hasFrom && !hasTo) {
         // Start eingegeben, aber Ziel noch leer -> Fokus auf Ziel!
         this.focusDestinationInput();
+      }
+    } else if (triggerSource === 'via') {
+      if (hasFrom && hasTo) {
+        setTimeout(() => this.onSearchSubmit(), 80);
       }
     }
   }
@@ -2815,9 +2896,38 @@ export class PlannerView implements OnInit, AfterViewInit {
     this.fromStation.set(to);
     this.toStation.set(from);
 
+    // If there are multiple via stations, reverse their order on route swap
+    if (this.viaStations().length > 1) {
+      this.viaStations.update(list => [...list].reverse());
+    }
+
     if (to && from) {
       this.onSearchSubmit();
     }
+  }
+
+  addViaStation() {
+    const id = 'via-' + Date.now();
+    this.viaStations.update(list => [...list, { id, station: null, query: '' }]);
+    this.activeInput.set(id);
+  }
+
+  removeViaStation(id: string) {
+    this.viaStations.update(list => list.filter(v => v.id !== id));
+    if (this.hasSearched() && this.fromStation() && this.toStation()) {
+      this.onSearchSubmit();
+    }
+  }
+
+  onViaStationChange(id: string, station: Station | null) {
+    this.viaStations.update(list => list.map(v => v.id === id ? { ...v, station, query: station ? station.name : '' } : v));
+    if (station && this.fromStation() && this.toStation()) {
+      this.checkAndTriggerAutoSearch('via');
+    }
+  }
+
+  onViaQueryChange(id: string, query: string) {
+    this.viaStations.update(list => list.map(v => v.id === id ? { ...v, query } : v));
   }
 
   setDestination(dest: { name: string; id: string; lat: number; lon: number }) {
@@ -3138,9 +3248,13 @@ export class PlannerView implements OnInit, AfterViewInit {
       this.transitService.stopActiveTracking();
     }
 
+    const activeVia = this.viaStations().find(v => (v.station && v.station.name) || v.query.trim());
+    const viaName = activeVia ? (activeVia.station?.name || activeVia.query.trim()) : undefined;
+
     const res = await this.transitService.findConnections({
       from: fromQuery,
       to: to.name,
+      via: viaName,
       departureTime: depDateTime,
       dTicketOnly: formVal.dTicketOnly ?? true,
       includeFernverkehr: formVal.includeFernverkehr ?? false,
@@ -3157,6 +3271,9 @@ export class PlannerView implements OnInit, AfterViewInit {
 
     // Intelligently save searched stations to recent searches
     this.transitService.recordRecentStation(to);
+    if (activeVia?.station) {
+      this.transitService.recordRecentStation(activeVia.station);
+    }
     if (!isFromCurrentLocation && from) {
       this.transitService.recordRecentStation(from);
     }

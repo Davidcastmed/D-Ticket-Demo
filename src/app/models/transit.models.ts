@@ -114,6 +114,7 @@ export interface ConnectionJourney {
     stationName: string;
     bufferMinutes: number;
   }[];
+  viaStationName?: string;
   accessibility?: RouteAccessibilitySummary;
 }
 

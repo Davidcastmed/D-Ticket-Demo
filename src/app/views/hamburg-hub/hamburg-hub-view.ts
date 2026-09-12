@@ -32,6 +32,19 @@ import { TransitService } from '../../services/transit.service';
           <p class="text-xs sm:text-sm text-[#D8F3DC]/90 leading-relaxed font-medium">
             Nutze dein Deutschlandticket optimal: Von Hamburg aus erreichst du Nord- und Ostsee, historische Hansestädte, Naturparks und Nachbarländer bequem und ohne Aufpreis im Regionalverkehr.
           </p>
+
+          <div class="pt-2 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              id="btn-open-dticket-network-map"
+              (click)="openDticketNetwork.emit()"
+              class="px-4 py-2 bg-white text-[#1B4332] hover:bg-[#D8F3DC] rounded-xl text-xs font-black flex items-center gap-1.5 shadow-md cursor-pointer transition-all active:scale-95"
+              aria-label="Offizielles Deutschlandticket Streckennetz auf der Karte öffnen"
+            >
+              <span class="mat-icon text-sm text-[#2D6A4F]">map</span>
+              <span>Offizielles D-Ticket Streckennetz auf Karte öffnen</span>
+            </button>
+          </div>
         </div>
 
         <div class="absolute -right-8 -bottom-8 opacity-10 text-white select-none pointer-events-none">
@@ -284,6 +297,7 @@ import { TransitService } from '../../services/transit.service';
 })
 export class HamburgHubView implements OnInit {
   @Output() navigateToPlanner = new EventEmitter<{ from: Station; to: Station }>();
+  @Output() openDticketNetwork = new EventEmitter<void>();
 
   private transitService = inject(TransitService);
 

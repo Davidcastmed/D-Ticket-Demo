@@ -82,6 +82,7 @@ export class App {
   readonly focusWalkOnDetail = signal<boolean>(false);
   readonly mapActiveJourney = signal<ConnectionJourney | null>(null);
   readonly mapSelectedStation = signal<Station | null>(null);
+  readonly showDticketOverlay = signal<boolean>(false);
 
   // Whether connection search results are currently visible in the planner
   readonly hasSearchResults = computed(() => {
@@ -154,5 +155,29 @@ export class App {
         this.liveBoardViewComponent.onStationSelected(station);
       }
     }, 50);
+  }
+
+  onOpenDticketNetwork() {
+    this.showMap.set(true);
+    this.showDticketOverlay.set(true);
+    this.mapActiveJourney.set(null);
+    this.mapSelectedStation.set(null);
+    if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+      setTimeout(() => {
+        document.getElementById('map-section')?.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
+    }
+  }
+
+  onPlanDticketRoute(route: { from: string; to: string }) {
+    const fromStation: Station = {
+      id: `station-${route.from.toLowerCase().replace(/\s+/g, '-')}`,
+      name: route.from
+    };
+    const toStation: Station = {
+      id: `station-${route.to.toLowerCase().replace(/\s+/g, '-')}`,
+      name: route.to
+    };
+    this.onNavigateToPlanner({ from: fromStation, to: toStation });
   }
 }

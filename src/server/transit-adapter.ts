@@ -429,12 +429,14 @@ export async function getOrResolveStation(nameOrId: string): Promise<Station> {
 export async function searchConnections(params: {
   from: string;
   to: string;
+  via?: string;
   departure?: string;
   dTicketOnly?: boolean;
   includeFernverkehr?: boolean;
 }): Promise<ConnectionJourney[]> {
   const fromStation = await getOrResolveStation(params.from);
   const toStation = await getOrResolveStation(params.to);
+  const viaStation = params.via && params.via.trim() ? await getOrResolveStation(params.via.trim()) : null;
 
   const dTicketOnly = params.dTicketOnly !== false;
   const includeFernverkehr = params.includeFernverkehr === true;
@@ -442,7 +444,7 @@ export async function searchConnections(params: {
   const depTime = params.departure ? new Date(params.departure) : new Date();
   const depIso = depTime.toISOString();
 
-  const cacheKey = `conn_${fromStation.id}_${toStation.id}_${depIso.slice(0, 16)}_${dTicketOnly}_${includeFernverkehr}`;
+  const cacheKey = `conn_${fromStation.id}_${toStation.id}_${viaStation ? viaStation.id : 'novia'}_${depIso.slice(0, 16)}_${dTicketOnly}_${includeFernverkehr}`;
   const cached = getCached<ConnectionJourney[]>(cacheKey);
   if (cached) return cached;
 
@@ -452,6 +454,9 @@ export async function searchConnections(params: {
   const url = new URL(`${HAFAS_API_BASE}/journeys`);
   url.searchParams.set('from', fromStation.id);
   url.searchParams.set('to', toStation.id);
+  if (viaStation) {
+    url.searchParams.set('via', viaStation.id);
+  }
   url.searchParams.set('departure', depIso);
   url.searchParams.set('results', '8');
   url.searchParams.set('stopovers', 'true');
@@ -470,13 +475,23 @@ export async function searchConnections(params: {
   }
 
   const data = await fetchSafeJson<{ journeys?: unknown[] }>(url.toString(), 6000);
-  if (data && Array.isArray(data.journeys)) {
-    journeys = data.journeys.map((j, index: number) => transformHafasJourney(j as Record<string, unknown>, index, fromStation, toStation));
+  if (data && Array.isArray(data.journeys) && data.journeys.length > 0) {
+    journeys = data.journeys.map((j, index: number) => {
+      const transformed = transformHafasJourney(j as Record<string, unknown>, index, fromStation, toStation);
+      if (viaStation) {
+        transformed.viaStationName = viaStation.name;
+      }
+      return transformed;
+    });
   }
 
   // If no journeys returned from remote service or custom station IDs, compute intelligent routes
   if (journeys.length === 0) {
-    journeys = generateFallbackRegionalJourneys(fromStation, toStation, depTime);
+    if (viaStation) {
+      journeys = generateViaJourneys(fromStation, viaStation, toStation, depTime);
+    } else {
+      journeys = generateFallbackRegionalJourneys(fromStation, toStation, depTime);
+    }
   }
 
   // Filter based on Deutschlandticket if strictly enabled
@@ -800,6 +815,57 @@ function rankConnections(journeys: ConnectionJourney[]): ConnectionJourney[] {
   }
 
   return journeys;
+}
+
+// Generate multi-leg regional journey routing via an intermediate stopover (via)
+function generateViaJourneys(from: Station, via: Station, to: Station, departureTime: Date): ConnectionJourney[] {
+  const leg1Journeys = generateFallbackRegionalJourneys(from, via, departureTime);
+  const results: ConnectionJourney[] = [];
+
+  for (let i = 0; i < Math.min(leg1Journeys.length, 3); i++) {
+    const j1 = leg1Journeys[i];
+    const arrTime = new Date(j1.arrival);
+    const transferBufferMin = 8 + (i * 4);
+    const dep2Time = new Date(arrTime.getTime() + transferBufferMin * 60000);
+
+    const leg2Journeys = generateFallbackRegionalJourneys(via, to, dep2Time);
+    const j2 = leg2Journeys[0] || leg2Journeys[i % leg2Journeys.length];
+
+    if (j2) {
+      const combinedDuration = Math.round((new Date(j2.arrival).getTime() - new Date(j1.departure).getTime()) / 60000);
+      const combinedTransfers = j1.transfers + j2.transfers + 1;
+      
+      const combinedTransferDetails = [
+        ...j1.transferDetails,
+        { stationName: via.name, bufferMinutes: transferBufferMin },
+        ...j2.transferDetails
+      ];
+
+      const combinedJourney: ConnectionJourney = {
+        id: `via-${j1.id}-${j2.id}`,
+        origin: from,
+        destination: to,
+        departure: j1.departure,
+        plannedDeparture: j1.plannedDeparture,
+        arrival: j2.arrival,
+        plannedArrival: j2.plannedArrival,
+        durationMinutes: combinedDuration,
+        durationFormatted: formatMinutes(combinedDuration),
+        transfers: combinedTransfers,
+        legs: [...j1.legs, ...j2.legs],
+        isDeutschlandticketValid: j1.isDeutschlandticketValid && j2.isDeutschlandticketValid,
+        hasDelay: j1.hasDelay || j2.hasDelay,
+        maxDelay: Math.max(j1.maxDelay, j2.maxDelay),
+        cancelled: j1.cancelled || j2.cancelled,
+        transferDetails: combinedTransferDetails,
+        viaStationName: via.name
+      };
+
+      results.push(combinedJourney);
+    }
+  }
+
+  return results.length > 0 ? results : generateFallbackRegionalJourneys(from, to, departureTime);
 }
 
 // Generate realistic intra-city and regional fallback journeys for German rail network & Hamburg

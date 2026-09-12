@@ -7,8 +7,7 @@ import {
   computed,
   ChangeDetectionStrategy,
   inject,
-  ElementRef,
-  HostListener
+  ElementRef
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule } from '@angular/forms';
@@ -29,6 +28,17 @@ const QUICK_CHIPS: Station[] = [
   { id: '8000261', name: 'München Hbf' }
 ];
 
+function normalizeGerman(str: string): string {
+  return str
+    .toLowerCase()
+    .replace(/ä/g, 'ae')
+    .replace(/ö/g, 'oe')
+    .replace(/ü/g, 'ue')
+    .replace(/ß/g, 'ss')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
 export interface EnrichedStationItem extends Station {
   distanceKm?: number;
   isNearby?: boolean;
@@ -42,6 +52,10 @@ export interface EnrichedStationItem extends Station {
   selector: 'app-station-input',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [CommonModule, ReactiveFormsModule],
+  host: {
+    '(document:click)': 'onDocumentClick($event)',
+    '(window:resize)': 'updateDropdownPosition()'
+  },
   template: `
     <div class="relative w-full">
       @if (showLabel && label) {
@@ -93,15 +107,28 @@ export interface EnrichedStationItem extends Station {
           (keydown)="onKeyDown($event)"
           autocomplete="off"
           [class.pl-10]="iconName && !showLabel"
-          [class.pl-3.5]="!iconName || showLabel"
-          [class.border-[#2D6A4F]]="isCursorActive"
-          [class.ring-2]="isCursorActive"
-          [class.ring-[#2D6A4F]/25]="isCursorActive"
-          [class.bg-white]="isCursorActive"
-          class="w-full pr-11 py-3 bg-[#FAF7F2] border border-[#D7CCC8] rounded-xl text-[#2E1F18] placeholder-[#8D6E63] text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]/30 focus:border-[#2D6A4F] focus:bg-white transition-all shadow-xs"
+          [class.pl-2]="(!iconName || showLabel) && variant === 'flush'"
+          [class.pl-3.5]="(!iconName || showLabel) && variant !== 'flush'"
+          [class.bg-white]="variant === 'standard' && isCursorActive"
+          [class.bg-[#FAF7F2]]="variant === 'standard' && !isCursorActive"
+          [class.border-[#D7CCC8]]="variant === 'standard' && !isCursorActive"
+          [class.border-[#2D6A4F]]="variant === 'standard' && isCursorActive"
+          [class.ring-2]="variant === 'standard' && isCursorActive"
+          [class.ring-[#2D6A4F]/25]="variant === 'standard' && isCursorActive"
+          [class.rounded-xl]="variant === 'standard'"
+          [class.border]="variant === 'standard'"
+          [class.shadow-xs]="variant === 'standard'"
+          [class.py-3]="variant === 'standard'"
+          [class.bg-transparent]="variant === 'flush'"
+          [class.border-0]="variant === 'flush'"
+          [class.rounded-none]="variant === 'flush'"
+          [class.shadow-none]="variant === 'flush'"
+          [class.py-2.5]="variant === 'flush'"
+          [class.sm:py-3]="variant === 'flush'"
+          class="w-full pr-10 text-[#2E1F18] placeholder-[#8D6E63] text-sm font-semibold focus:outline-none transition-all"
         />
 
-        <div class="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1 z-10">
+        <div class="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1 z-10">
           @if (isSearching()) {
             <span class="mat-icon animate-spin text-sm text-[#2D6A4F] mr-0.5" title="Stationen werden gesucht..." aria-hidden="true">sync</span>
           }
@@ -120,22 +147,27 @@ export interface EnrichedStationItem extends Station {
         </div>
       </div>
 
-      <!-- Autocomplete Suggestions Dropdown: Only shown when at least 2 characters are typed -->
+      <!-- Autocomplete Suggestions Dropdown: Displays matches with rich metadata -->
       @if (isOpen() && searchQuery().trim().length >= 2) {
         <div
           [id]="inputId + '-suggestions'"
           role="listbox"
           [attr.aria-label]="'Vorschläge für ' + (label || 'Bahnhof')"
-          class="absolute z-50 left-0 right-0 mt-1.5 bg-white border border-[#D7CCC8] rounded-2xl shadow-xl overflow-hidden max-h-80 overflow-y-auto divide-y divide-[#EFEBE9] animate-in fade-in zoom-in-95 duration-100"
+          class="absolute z-50 mt-1 bg-white border border-[#D7CCC8] rounded-xl shadow-2xl overflow-hidden max-h-80 overflow-y-auto divide-y divide-[#EFEBE9] animate-in fade-in zoom-in-95 duration-100"
+          [class.left-0]="dropdownLeft() === null"
+          [class.right-0]="dropdownWidth() === null"
+          [style.left.px]="dropdownLeft()"
+          [style.width.px]="dropdownWidth()"
         >
-          <!-- Matching Suggestions List (No Aktueller Standort inside suggestions) -->
+          <!-- Matching Suggestions List -->
           @if (displayedSuggestions().length > 0) {
             <div class="py-1">
-              <div class="px-3 py-1 text-[9px] font-bold text-[#8D6E63] uppercase tracking-wider flex items-center justify-between border-b border-[#F5EFE6]">
-                <span>
-                  {{ displayedSuggestions().length }} Treffer für „{{ searchQuery().trim() }}“
+              <div class="px-3.5 py-1.5 text-[10px] font-bold text-[#8D6E63] uppercase tracking-wider flex items-center justify-between border-b border-[#F5EFE6] bg-[#FAF7F2]">
+                <span class="flex items-center gap-1.5">
+                  <span class="mat-icon text-xs text-[#2D6A4F]">train</span>
+                  <span>{{ displayedSuggestions().length }} Treffer für „{{ searchQuery().trim() }}“</span>
                 </span>
-                <span class="text-[9px] text-[#A1887F] font-normal lowercase">Nah- & Fernverkehr</span>
+                <span class="text-[9px] text-[#A1887F] font-medium lowercase">Nah- & Fernverkehr</span>
               </div>
               @for (station of displayedSuggestions(); track station.id + '-' + $index; let idx = $index) {
                 <button
@@ -144,7 +176,7 @@ export interface EnrichedStationItem extends Station {
                   (mouseenter)="highlightedIndex.set(idx)"
                   role="option"
                   [attr.aria-selected]="highlightedIndex() === idx"
-                  class="w-full text-left px-3.5 py-2 hover:bg-[#EDF9F0] focus:bg-[#D8F3DC] flex items-center justify-between text-sm text-[#2E1F18] transition-colors cursor-pointer"
+                  class="w-full text-left px-3.5 py-2.5 hover:bg-[#EDF9F0] focus:bg-[#D8F3DC] flex items-center justify-between text-sm text-[#2E1F18] transition-colors cursor-pointer min-h-[44px]"
                   [class.bg-[#EDF9F0]]="highlightedIndex() === idx"
                   [attr.aria-label]="station.name + (station.distanceKm ? ' in ' + station.distanceKm + ' Kilometern Entfernung' : '')"
                 >
@@ -192,10 +224,10 @@ export interface EnrichedStationItem extends Station {
               }
             </div>
           } @else if (!isSearching()) {
-            <div class="p-4 text-center text-xs text-[#8D6E63] space-y-1" role="status">
-              <span class="mat-icon text-base text-[#BCAAA4]" aria-hidden="true">search_off</span>
-              <div>Keine Haltestelle für „{{ searchQuery() }}“ gefunden.</div>
-              <div class="text-[11px] text-[#A1887F]">Suche nach Bahnhöfen in ganz Deutschland (z. B. Horst, Elmshorn, Kiel, Westerland).</div>
+            <div class="p-4 text-center text-xs text-[#8D6E63] space-y-1.5" role="status">
+              <span class="mat-icon text-xl text-[#BCAAA4]" aria-hidden="true">search_off</span>
+              <div class="font-semibold text-[#4E342E]">Keine Haltestelle für „{{ searchQuery() }}“ gefunden.</div>
+              <div class="text-[11px] text-[#A1887F]">Tipp: Suche nach Bahnhöfen in ganz Deutschland (z. B. Horst, Elmshorn, Kiel, Hamburg, Berlin).</div>
             </div>
           }
         </div>
@@ -204,6 +236,7 @@ export interface EnrichedStationItem extends Station {
   `
 })
 export class StationInput {
+  @Input() variant: 'standard' | 'flush' = 'standard';
   @Input() label = 'Bahnhof';
   @Input() showLabel = true;
   @Input() placeholder = 'Stadt oder Bahnhof suchen...';
@@ -211,6 +244,10 @@ export class StationInput {
   @Input() inputId = 'station-input';
   @Input() allowCurrentLocation = true;
   @Input() isCursorActive = false;
+  @Input() matchContainerSelector?: string;
+
+  readonly dropdownLeft = signal<number | null>(null);
+  readonly dropdownWidth = signal<number | null>(null);
 
   @Input() set initialStation(station: Station | null) {
     if (station) {
@@ -239,7 +276,7 @@ export class StationInput {
   private elementRef = inject(ElementRef);
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
-  // Single-row horizontal swipe quick chips (up to 7 items) based on recent searches, favorites, and popular stations
+  // Single-row horizontal quick chips based on recent searches, favorites, and popular stations
   readonly quickChips = computed<Station[]>(() => {
     const recent = this.transitService.recentStations();
     const favs = this.transitService.favoriteStations();
@@ -273,9 +310,11 @@ export class StationInput {
     return combined.slice(0, 7);
   });
 
-  // Computed suggestions merging local fast matches + server DB HAFAS matches + distance scoring
+  // Computed suggestions merging local fast matches + server DB HAFAS matches + German normalization + distance scoring
   readonly displayedSuggestions = computed<EnrichedStationItem[]>(() => {
-    const q = this.searchQuery().trim().toLowerCase();
+    const rawQ = this.searchQuery().trim();
+    const q = rawQ.toLowerCase();
+    const qNorm = normalizeGerman(rawQ);
     const userLoc = this.transitService.userLocation();
 
     const enrichStation = (s: Station | StationData): EnrichedStationItem => {
@@ -300,19 +339,24 @@ export class StationInput {
       };
     };
 
-    // Do not show suggestions until at least 2 characters are entered (optimization & minimalism)
     if (q.length < 2) {
       return [];
     }
 
-    // When searching: match against ALL_GERMAN_STATIONS + API suggestions
+    // Match against ALL_GERMAN_STATIONS with German umlaut & substring normalization
     const localFiltered = ALL_GERMAN_STATIONS.filter(s => {
       if (s.isCurrentLocation || s.id === 'current-location' || s.name.toLowerCase().includes('standort') || s.name.toLowerCase().includes('location')) {
         return false;
       }
       const sName = s.name.toLowerCase();
+      const sNorm = normalizeGerman(s.name);
       const sClean = sName.replace(/[()-]/g, ' ');
-      return sName.includes(q) || sClean.includes(q) || (s.region && s.region.toLowerCase().includes(q));
+      return (
+        sName.includes(q) ||
+        sNorm.includes(qNorm) ||
+        sClean.includes(q) ||
+        (s.region && (s.region.toLowerCase().includes(q) || normalizeGerman(s.region).includes(qNorm)))
+      );
     });
 
     const localEnriched = localFiltered.map(s => enrichStation(s));
@@ -338,37 +382,34 @@ export class StationInput {
       }
     }
 
-    // Intelligent multi-factor sorting:
-    // 1. Exact match
-    // 2. Starts with query
-    // 3. Proximity bonus if location is known
-    // 4. Hub status
+    // Intelligent multi-factor sorting
     return Array.from(mergedMap.values())
       .sort((a, b) => {
         const aName = a.name.toLowerCase();
         const bName = b.name.toLowerCase();
+        const aNorm = normalizeGerman(a.name);
+        const bNorm = normalizeGerman(b.name);
 
         // Exact match check
-        const aExact = aName === q;
-        const bExact = bName === q;
+        const aExact = aName === q || aNorm === qNorm;
+        const bExact = bName === q || bNorm === qNorm;
         if (aExact && !bExact) return -1;
         if (!aExact && bExact) return 1;
 
         // Prefix match check
-        const aStarts = aName.startsWith(q);
-        const bStarts = bName.startsWith(q);
+        const aStarts = aName.startsWith(q) || aNorm.startsWith(qNorm);
+        const bStarts = bName.startsWith(q) || bNorm.startsWith(qNorm);
         if (aStarts && !bStarts) return -1;
         if (!aStarts && bStarts) return 1;
 
-        // Word start match check (e.g. "Horst" in "Horst (Holstein)" or "Konstanz" in "Konstanz-Petershausen")
-        const aWordStart = aName.includes(` ${q}`) || aName.includes(`(${q}`);
-        const bWordStart = bName.includes(` ${q}`) || bName.includes(`(${q}`);
+        // Word start match check
+        const aWordStart = aName.includes(` ${q}`) || aName.includes(`(${q}`) || aNorm.includes(` ${qNorm}`) || aNorm.includes(`(${qNorm}`);
+        const bWordStart = bName.includes(` ${q}`) || bName.includes(`(${q}`) || bNorm.includes(` ${qNorm}`) || bNorm.includes(`(${qNorm}`);
         if (aWordStart && !bWordStart) return -1;
         if (!aWordStart && bWordStart) return 1;
 
-        // Proximity factor (closer stations rank higher if within same match grade)
+        // Proximity factor
         if (userLoc && a.distanceKm !== undefined && b.distanceKm !== undefined) {
-          // If one is very close (< 40km) and other is far (> 100km), prefer close
           if (a.distanceKm < 40 && b.distanceKm >= 40) return -1;
           if (b.distanceKm < 40 && a.distanceKm >= 40) return 1;
         }
@@ -382,7 +423,6 @@ export class StationInput {
       .slice(0, 14);
   });
 
-  @HostListener('document:click', ['$event'])
   onDocumentClick(event: MouseEvent) {
     if (!this.elementRef.nativeElement.contains(event.target)) {
       this.isOpen.set(false);
@@ -393,6 +433,28 @@ export class StationInput {
   activateGeolocation(event: Event) {
     event.stopPropagation();
     this.transitService.requestGeolocation(true);
+  }
+
+  updateDropdownPosition(): void {
+    const selector = this.matchContainerSelector || (this.variant === 'flush' ? '#planner-card, .bg-white.rounded-2xl' : null);
+    if (!selector) {
+      this.dropdownLeft.set(null);
+      this.dropdownWidth.set(null);
+      return;
+    }
+    const host = this.elementRef.nativeElement as HTMLElement;
+    const container = (this.matchContainerSelector ? document.querySelector(this.matchContainerSelector) : host.closest(selector)) as HTMLElement | null;
+    if (!container) {
+      this.dropdownLeft.set(null);
+      this.dropdownWidth.set(null);
+      return;
+    }
+    const containerRect = container.getBoundingClientRect();
+    const hostRect = host.getBoundingClientRect();
+    if (containerRect.width > 0) {
+      this.dropdownLeft.set(Math.round(containerRect.left - hostRect.left));
+      this.dropdownWidth.set(Math.round(containerRect.width));
+    }
   }
 
   onInputChange(event: Event) {
@@ -409,15 +471,16 @@ export class StationInput {
 
     if (val.trim().length >= 2) {
       this.isOpen.set(true);
+      this.updateDropdownPosition();
       this.isSearching.set(true);
       this.debounceTimer = setTimeout(async () => {
         try {
           const results = await this.transitService.searchStations(val);
-          // Never include current location or standort in station suggestions
           const cleanResults = results.filter(
             s => !s.isCurrentLocation && s.id !== 'current-location' && !s.name.toLowerCase().includes('standort') && !s.name.toLowerCase().includes('location')
           );
           this.apiSuggestions.set(cleanResults);
+          this.updateDropdownPosition();
         } catch {
           this.apiSuggestions.set([]);
         } finally {
@@ -434,9 +497,21 @@ export class StationInput {
   onInputFocus() {
     this.inputFocus.emit();
     this.highlightedIndex.set(-1);
-    // User mandate: No suggestions appear upon simply placing the cursor into either field.
-    // Suggestions are only triggered when the user types the second character (length >= 2).
-    this.isOpen.set(false);
+    // If the input already has 2 or more characters, show matching suggestions
+    if (this.searchQuery().trim().length >= 2) {
+      this.isOpen.set(true);
+      this.updateDropdownPosition();
+    }
+  }
+
+  private scrollHighlightedIntoView(index: number) {
+    setTimeout(() => {
+      const hostEl = this.elementRef.nativeElement as HTMLElement;
+      const options = hostEl.querySelectorAll('[role="option"]');
+      if (options && options[index]) {
+        options[index].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+    }, 0);
   }
 
   onKeyDown(event: KeyboardEvent) {
@@ -470,6 +545,7 @@ export class StationInput {
     if (!this.isOpen() || list.length === 0) {
       if (event.key === 'ArrowDown') {
         this.isOpen.set(true);
+        this.updateDropdownPosition();
       }
       return;
     }
@@ -478,10 +554,12 @@ export class StationInput {
       event.preventDefault();
       const nextIdx = (this.highlightedIndex() + 1) % list.length;
       this.highlightedIndex.set(nextIdx);
+      this.scrollHighlightedIntoView(nextIdx);
     } else if (event.key === 'ArrowUp') {
       event.preventDefault();
       const prevIdx = this.highlightedIndex() <= 0 ? list.length - 1 : this.highlightedIndex() - 1;
       this.highlightedIndex.set(prevIdx);
+      this.scrollHighlightedIntoView(prevIdx);
     } else if (event.key === 'Escape') {
       this.isOpen.set(false);
       this.highlightedIndex.set(-1);

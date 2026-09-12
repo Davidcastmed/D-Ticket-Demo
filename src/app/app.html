@@ -273,6 +273,7 @@
           @case ('hamburg-hub') {
             <app-hamburg-hub-view
               (navigateToPlanner)="onNavigateToPlanner($event)"
+              (openDticketNetwork)="onOpenDticketNetwork()"
             ></app-hamburg-hub-view>
           }
           @case ('surprise') {
@@ -314,6 +315,8 @@
               <app-map-view
                 [activeJourney]="mapActiveJourney()"
                 [selectedStation]="mapSelectedStation()"
+                [showDticketOverlay]="showDticketOverlay()"
+                (planDticketRoute)="onPlanDticketRoute($event)"
               ></app-map-view>
             </div>
           </div>

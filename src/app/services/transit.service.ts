@@ -559,6 +559,7 @@ export class TransitService {
   async findConnections(params: {
     from: string;
     to: string;
+    via?: string;
     departureTime?: string;
     dTicketOnly: boolean;
     includeFernverkehr: boolean;
@@ -571,6 +572,9 @@ export class TransitService {
       dTicketOnly: String(params.dTicketOnly),
       includeFernverkehr: String(params.includeFernverkehr)
     });
+    if (params.via) {
+      queryParams.set('via', params.via);
+    }
     if (params.departureTime) {
       queryParams.set('departure', params.departureTime);
     }
@@ -593,6 +597,7 @@ export class TransitService {
       const directJourneys = await searchConnectionsDirect({
         from: params.from,
         to: params.to,
+        via: params.via,
         departure: params.departureTime,
         dTicketOnly: params.dTicketOnly,
         includeFernverkehr: params.includeFernverkehr

@@ -219,10 +219,10 @@
 
           <!-- 2. Centro: Destino de la conexión -->
           <div class="flex-1 min-w-0 flex items-center justify-center px-1">
-            @if (journey?.destination) {
+            @if (journey.destination) {
               <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FAF7F2] border border-[#E6DED6] text-xs font-bold text-[#1F1612] shadow-2xs max-w-full truncate">
                 <span class="mat-icon text-sm text-[#1B4332] shrink-0">place</span>
-                <span class="truncate">Nach {{ journey?.destination?.name }}</span>
+                <span class="truncate">Nach {{ journey.destination.name }}</span>
               </div>
             }
           </div>

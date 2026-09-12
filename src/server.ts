@@ -193,6 +193,7 @@ app.get('/api/connections', async (req, res) => {
   try {
     const from = String(req.query['from'] || '').trim();
     const to = String(req.query['to'] || '').trim();
+    const via = req.query['via'] ? String(req.query['via']).trim() : undefined;
     const departure = req.query['departure'] ? String(req.query['departure']) : undefined;
     const dTicketOnly = req.query['dTicketOnly'] !== 'false';
     const includeFernverkehr = req.query['includeFernverkehr'] === 'true';
@@ -204,6 +205,7 @@ app.get('/api/connections', async (req, res) => {
     const journeys = await searchConnections({
       from,
       to,
+      via,
       departure,
       dTicketOnly,
       includeFernverkehr
@@ -218,6 +220,7 @@ app.get('/api/connections', async (req, res) => {
     return res.json({
       from,
       to,
+      via,
       dTicketOnly,
       includeFernverkehr,
       count: enrichedJourneys.length,
