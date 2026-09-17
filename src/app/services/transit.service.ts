@@ -482,6 +482,9 @@ export class TransitService {
     return journeys.map((j: ConnectionJourney) => {
       const userCoords = params.currentLocationCoords || this.userLocation();
       const startLoc = j.origin?.location || j.legs[0]?.origin?.location;
+      const isDticketValid = typeof j.isDeutschlandticketValid === 'boolean'
+        ? j.isDeutschlandticketValid
+        : (j.legs && j.legs.length > 0 ? j.legs.every(l => l.isDeutschlandticketValid !== false) : true);
 
       if (params.isFromCurrentLocation) {
         let walk = { minutes: 5, distanceMeters: 400, distanceText: 'ca. 400 m' };
@@ -495,6 +498,7 @@ export class TransitService {
         }
         return {
           ...j,
+          isDeutschlandticketValid: isDticketValid,
           isFromCurrentLocation: true,
           startAddress: this.userAddress() || undefined,
           startStreetNumber: this.userStreetNumber() || undefined,
@@ -504,6 +508,7 @@ export class TransitService {
       } else {
         return {
           ...j,
+          isDeutschlandticketValid: isDticketValid,
           isFromCurrentLocation: false,
           walkToStartMinutes: undefined,
           walkToStartDistanceMeters: undefined
@@ -563,6 +568,13 @@ export class TransitService {
     departureTime?: string;
     dTicketOnly: boolean;
     includeFernverkehr: boolean;
+    products?: {
+      regional?: boolean;
+      suburban?: boolean;
+      subway?: boolean;
+      bus?: boolean;
+      tram?: boolean;
+    };
     isFromCurrentLocation?: boolean;
     currentLocationCoords?: { latitude: number; longitude: number };
   }): Promise<{ journeys: ConnectionJourney[]; error?: string }> {
@@ -577,6 +589,12 @@ export class TransitService {
     }
     if (params.departureTime) {
       queryParams.set('departure', params.departureTime);
+    }
+    if (params.products) {
+      if (params.products.regional !== undefined) queryParams.set('regional', String(params.products.regional));
+      if (params.products.suburban !== undefined) queryParams.set('suburban', String(params.products.suburban));
+      if (params.products.subway !== undefined) queryParams.set('subway', String(params.products.subway));
+      if (params.products.bus !== undefined) queryParams.set('bus', String(params.products.bus));
     }
 
     // 1. Try server API (/api/connections) with a 3.5s timeout
@@ -600,7 +618,8 @@ export class TransitService {
         via: params.via,
         departure: params.departureTime,
         dTicketOnly: params.dTicketOnly,
-        includeFernverkehr: params.includeFernverkehr
+        includeFernverkehr: params.includeFernverkehr,
+        products: params.products
       });
 
       if (directJourneys && directJourneys.length > 0) {

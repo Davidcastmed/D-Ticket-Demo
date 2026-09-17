@@ -433,6 +433,13 @@ export async function searchConnections(params: {
   departure?: string;
   dTicketOnly?: boolean;
   includeFernverkehr?: boolean;
+  products?: {
+    regional?: boolean;
+    suburban?: boolean;
+    subway?: boolean;
+    bus?: boolean;
+    tram?: boolean;
+  };
 }): Promise<ConnectionJourney[]> {
   const fromStation = await getOrResolveStation(params.from);
   const toStation = await getOrResolveStation(params.to);
@@ -441,10 +448,16 @@ export async function searchConnections(params: {
   const dTicketOnly = params.dTicketOnly !== false;
   const includeFernverkehr = params.includeFernverkehr === true;
 
+  const allowRegional = params.products?.regional !== false;
+  const allowSuburban = params.products?.suburban !== false;
+  const allowSubway = params.products?.subway !== false;
+  const allowBus = params.products?.bus !== false;
+
   const depTime = params.departure ? new Date(params.departure) : new Date();
   const depIso = depTime.toISOString();
 
-  const cacheKey = `conn_${fromStation.id}_${toStation.id}_${viaStation ? viaStation.id : 'novia'}_${depIso.slice(0, 16)}_${dTicketOnly}_${includeFernverkehr}`;
+  const prodKey = `${allowRegional}_${allowSuburban}_${allowSubway}_${allowBus}`;
+  const cacheKey = `conn_${fromStation.id}_${toStation.id}_${viaStation ? viaStation.id : 'novia'}_${depIso.slice(0, 16)}_${dTicketOnly}_${includeFernverkehr}_${prodKey}`;
   const cached = getCached<ConnectionJourney[]>(cacheKey);
   if (cached) return cached;
 
@@ -462,12 +475,12 @@ export async function searchConnections(params: {
   url.searchParams.set('stopovers', 'true');
   url.searchParams.set('polylines', 'true');
   url.searchParams.set('remarks', 'true');
-  url.searchParams.set('suburban', 'true');
-  url.searchParams.set('subway', 'true');
-  url.searchParams.set('bus', 'true');
-  url.searchParams.set('ferry', 'true');
-  url.searchParams.set('tram', 'true');
-  url.searchParams.set('regional', 'true');
+  url.searchParams.set('suburban', allowSuburban ? 'true' : 'false');
+  url.searchParams.set('subway', allowSubway ? 'true' : 'false');
+  url.searchParams.set('bus', allowBus ? 'true' : 'false');
+  url.searchParams.set('ferry', allowBus || allowRegional ? 'true' : 'false');
+  url.searchParams.set('tram', allowSubway || allowSuburban ? 'true' : 'false');
+  url.searchParams.set('regional', allowRegional ? 'true' : 'false');
 
   if (dTicketOnly && !includeFernverkehr) {
     url.searchParams.set('nationalExpress', 'false');
@@ -497,6 +510,33 @@ export async function searchConnections(params: {
   // Filter based on Deutschlandticket if strictly enabled
   if (dTicketOnly && !includeFernverkehr) {
     journeys = journeys.filter(j => j.isDeutschlandticketValid);
+  }
+
+  // Filter based on selected transit modes if custom products are specified
+  if (params.products) {
+    const isLegProductAllowed = (leg: TransitLeg): boolean => {
+      if (leg.walking) return true;
+      const prod = (leg.line?.product || '').toLowerCase();
+      const lineName = (leg.line?.name || '').toUpperCase();
+      if (prod === 'regional' || prod === 'regionalexp' || lineName.startsWith('RE') || lineName.startsWith('RB') || lineName.startsWith('MEX') || lineName.startsWith('IRE')) {
+        return allowRegional;
+      }
+      if (prod === 'suburban' || lineName.startsWith('S') || lineName.startsWith('RS')) {
+        return allowSuburban;
+      }
+      if (prod === 'subway' || lineName.startsWith('U')) {
+        return allowSubway;
+      }
+      if (prod === 'bus' || lineName.startsWith('BUS')) {
+        return allowBus;
+      }
+      return true;
+    };
+
+    const filteredJourneys = journeys.filter(j => j.legs.every(leg => isLegProductAllowed(leg)));
+    if (filteredJourneys.length > 0) {
+      journeys = filteredJourneys;
+    }
   }
 
   // Apply connection ranking

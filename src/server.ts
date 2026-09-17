@@ -198,6 +198,11 @@ app.get('/api/connections', async (req, res) => {
     const dTicketOnly = req.query['dTicketOnly'] !== 'false';
     const includeFernverkehr = req.query['includeFernverkehr'] === 'true';
 
+    const regional = req.query['regional'] !== 'false';
+    const suburban = req.query['suburban'] !== 'false';
+    const subway = req.query['subway'] !== 'false';
+    const bus = req.query['bus'] !== 'false';
+
     if (!from || !to) {
       return res.status(400).json({ error: 'Start- und Zielbahnhof sind erforderlich.' });
     }
@@ -208,7 +213,13 @@ app.get('/api/connections', async (req, res) => {
       via,
       departure,
       dTicketOnly,
-      includeFernverkehr
+      includeFernverkehr,
+      products: {
+        regional,
+        suburban,
+        subway,
+        bus
+      }
     });
 
     // Enrich each journey with live accessibility and elevator status

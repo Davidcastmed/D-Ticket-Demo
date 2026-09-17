@@ -553,156 +553,247 @@ interface CuratedDestination {
               </div>
             }
 
-            <!-- COLLAPSIBLE OPTIONS: From 'Direkt ab' to 'Verbindung suchen' -->
+            <!-- COLLAPSIBLE OPTIONS: Expandable Deutschlandticket & Transport Modes -->
             @if (showSearchOptions()) {
               <div class="space-y-3.5 pt-2 border-t border-[#EDE5DC] animate-in fade-in duration-150">
                 
-                <!-- Popular Quick Shortcuts with seamless inline wrapping directly from 'Direkt ab' -->
-            <div class="w-full flex flex-wrap items-center gap-1.5 pt-0.5" role="region" aria-label="Schnellreiseziele">
-              
-              <!-- Starting Hub Selector directly inline with Nach -->
-              <div class="inline-flex items-center gap-1 shrink-0">
-                <span class="text-[11px] text-[#8D6E63] font-bold flex items-center gap-1 shrink-0">
-                  <span class="mat-icon text-xs text-[#2D6A4F]" aria-hidden="true">near_me</span>
-                  <span>Direkt ab</span>
-                </span>
-                
-                <select
-                  id="select-starting-hub"
-                  [value]="selectedStartingHub()"
-                  (change)="onStartingHubChange($any($event.target).value)"
-                  class="px-2 py-0.5 bg-white border border-[#D7CCC8] hover:border-[#1B4332] rounded-[4px] text-[#1F1612] text-xs font-bold focus:outline-none focus:ring-1 focus:ring-[#2D6A4F] cursor-pointer shadow-2xs shrink-0"
-                  aria-label="Startbahnhof für Schnellziele auswählen"
-                >
-                  @for (hub of startingHubs; track hub.label) {
-                    <option [value]="hub.label">{{ hub.label }}</option>
+                <!-- Expandable Nur Deutschland / Verkehrsmittel Section -->
+                <div class="rounded-xl border border-[#D7CCC8]/80 bg-[#FAF7F2] p-2.5 sm:p-3 space-y-2.5 shadow-2xs">
+                  <!-- Top header row: Nur Deutschland checkbox + Expand/Collapse Button -->
+                  <div class="flex items-center justify-between gap-2">
+                    <label class="flex items-center gap-2 cursor-pointer select-none min-w-0">
+                      <input
+                        id="chk-d-ticket"
+                        type="checkbox"
+                        formControlName="dTicketOnly"
+                        aria-label="Nur Deutschland Nahverkehrsverbindungen"
+                        class="w-4 h-4 text-[#2D6A4F] rounded focus:ring-[#2D6A4F] border-[#D7CCC8] accent-[#2D6A4F] cursor-pointer"
+                      />
+                      <div class="flex items-center gap-1.5 min-w-0">
+                        <span class="text-xs sm:text-sm font-bold text-[#1B4332] truncate">Nur Deutschland</span>
+                        <span class="px-1.5 py-0.5 rounded bg-[#EDF9F0] text-[#1B4332] border border-[#2D6A4F]/20 text-[10px] font-black shrink-0">
+                          D-Ticket
+                        </span>
+                      </div>
+                    </label>
+
+                    <!-- Expand / Collapse Button -->
+                    <button
+                      type="button"
+                      id="btn-toggle-transit-modes"
+                      (click)="toggleTransitModesExpanded()"
+                      class="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-bold text-[#2D6A4F] hover:bg-[#EDF9F0] hover:text-[#1B4332] transition-colors cursor-pointer border border-transparent hover:border-[#2D6A4F]/30"
+                      [attr.aria-expanded]="isTransitModesExpanded()"
+                      aria-label="Verkehrsmittel Optionen ein- oder ausklappen"
+                      title="Verkehrsmittel (Regionalzüge, S-Bahn, U-Bahn, Bus) anpassen"
+                    >
+                      <span class="hidden xs:inline">{{ isTransitModesExpanded() ? 'Optionen einklappen' : 'Verkehrsmittel wählen' }}</span>
+                      <span class="mat-icon text-sm transition-transform duration-200" [class.rotate-180]="isTransitModesExpanded()">
+                        expand_more
+                      </span>
+                    </button>
+                  </div>
+
+                  <!-- Extended Sub-options: Checkboxes for Regionalzüge, S-Bahnen, U-Bahnen, Bus with attractive icons -->
+                  @if (isTransitModesExpanded()) {
+                    <div class="pt-2 border-t border-[#E6DED6] space-y-2 animate-in fade-in slide-in-from-top-1 duration-150">
+                      <div class="flex items-center justify-between text-[11px] text-[#795548] px-0.5">
+                        <span class="font-semibold flex items-center gap-1">
+                          <span class="mat-icon text-xs text-[#2D6A4F]">tune</span>
+                          <span>Verkehrsmittel auswählen:</span>
+                        </span>
+                        <div class="flex items-center gap-2">
+                          <button
+                            type="button"
+                            (click)="setAllTransitModes(true)"
+                            class="text-[10px] font-bold text-[#2D6A4F] hover:underline cursor-pointer"
+                          >
+                            Alle
+                          </button>
+                          <span class="text-[#D7CCC8]">•</span>
+                          <button
+                            type="button"
+                            (click)="setAllTransitModes(false)"
+                            class="text-[10px] font-semibold text-[#8D6E63] hover:text-[#1F1612] cursor-pointer"
+                          >
+                            Keine
+                          </button>
+                        </div>
+                      </div>
+
+                      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2" role="group" aria-label="Verkehrsmittel Filter">
+                        <!-- 1. Trenes Regionales (Regionalzüge) -->
+                        <label
+                          class="flex items-center justify-between p-2 rounded-lg bg-white border border-[#E6DED6] hover:border-[#2D6A4F] hover:bg-[#FAF7F2] cursor-pointer transition-all shadow-2xs group"
+                          [class.border-[#2D6A4F]]="searchForm.get('includeRegional')?.value"
+                          [class.bg-[#EDF9F0]/40]="searchForm.get('includeRegional')?.value"
+                        >
+                          <div class="flex items-center gap-2 min-w-0">
+                            <span class="w-7 h-7 rounded-md bg-[#EDF9F0] text-[#1B4332] flex items-center justify-center shrink-0 border border-[#2D6A4F]/20 group-hover:scale-105 transition-transform">
+                              <span class="mat-icon text-base">directions_railway</span>
+                            </span>
+                            <div class="flex flex-col min-w-0">
+                              <span class="text-xs font-bold text-[#1F1612] truncate">Regionalzüge</span>
+                              <span class="text-[10px] text-[#795548] truncate">RE, RB, MEX, IRE</span>
+                            </div>
+                          </div>
+                          <input
+                            id="chk-regional"
+                            type="checkbox"
+                            formControlName="includeRegional"
+                            class="w-4 h-4 text-[#2D6A4F] rounded focus:ring-[#2D6A4F] border-[#D7CCC8] accent-[#2D6A4F] cursor-pointer ml-2 shrink-0"
+                            aria-label="Regionalzüge (RE, RB, MEX, IRE) einschließen"
+                          />
+                        </label>
+
+                        <!-- 2. S-Bahnen -->
+                        <label
+                          class="flex items-center justify-between p-2 rounded-lg bg-white border border-[#E6DED6] hover:border-[#2D6A4F] hover:bg-[#FAF7F2] cursor-pointer transition-all shadow-2xs group"
+                          [class.border-[#2D6A4F]]="searchForm.get('includeSuburban')?.value"
+                          [class.bg-[#EDF9F0]/40]="searchForm.get('includeSuburban')?.value"
+                        >
+                          <div class="flex items-center gap-2 min-w-0">
+                            <span class="w-7 h-7 rounded-md bg-[#E8F5E9] text-[#2E7D32] flex items-center justify-center shrink-0 border border-[#2E7D32]/20 group-hover:scale-105 transition-transform">
+                              <span class="mat-icon text-base">subway</span>
+                            </span>
+                            <div class="flex flex-col min-w-0">
+                              <span class="text-xs font-bold text-[#1F1612] truncate">S-Bahnen</span>
+                              <span class="text-[10px] text-[#795548] truncate">S-Bahn & Regio-S-Bahn</span>
+                            </div>
+                          </div>
+                          <input
+                            id="chk-suburban"
+                            type="checkbox"
+                            formControlName="includeSuburban"
+                            class="w-4 h-4 text-[#2D6A4F] rounded focus:ring-[#2D6A4F] border-[#D7CCC8] accent-[#2D6A4F] cursor-pointer ml-2 shrink-0"
+                            aria-label="S-Bahnen einschließen"
+                          />
+                        </label>
+
+                        <!-- 3. U-Bahnen -->
+                        <label
+                          class="flex items-center justify-between p-2 rounded-lg bg-white border border-[#E6DED6] hover:border-[#1565C0] hover:bg-[#FAF7F2] cursor-pointer transition-all shadow-2xs group"
+                          [class.border-[#1565C0]]="searchForm.get('includeSubway')?.value"
+                          [class.bg-[#E3F2FD]/40]="searchForm.get('includeSubway')?.value"
+                        >
+                          <div class="flex items-center gap-2 min-w-0">
+                            <span class="w-7 h-7 rounded-md bg-[#E3F2FD] text-[#1565C0] flex items-center justify-center shrink-0 border border-[#1565C0]/20 group-hover:scale-105 transition-transform">
+                              <span class="mat-icon text-base">directions_subway</span>
+                            </span>
+                            <div class="flex flex-col min-w-0">
+                              <span class="text-xs font-bold text-[#1F1612] truncate">U-Bahnen</span>
+                              <span class="text-[10px] text-[#795548] truncate">U-Bahn & Metro</span>
+                            </div>
+                          </div>
+                          <input
+                            id="chk-subway"
+                            type="checkbox"
+                            formControlName="includeSubway"
+                            class="w-4 h-4 text-[#1565C0] rounded focus:ring-[#1565C0] border-[#D7CCC8] accent-[#1565C0] cursor-pointer ml-2 shrink-0"
+                            aria-label="U-Bahnen einschließen"
+                          />
+                        </label>
+
+                        <!-- 4. Bus -->
+                        <label
+                          class="flex items-center justify-between p-2 rounded-lg bg-white border border-[#E6DED6] hover:border-[#E65100] hover:bg-[#FAF7F2] cursor-pointer transition-all shadow-2xs group"
+                          [class.border-[#E65100]]="searchForm.get('includeBus')?.value"
+                          [class.bg-[#FFF3E0]/40]="searchForm.get('includeBus')?.value"
+                        >
+                          <div class="flex items-center gap-2 min-w-0">
+                            <span class="w-7 h-7 rounded-md bg-[#FFF3E0] text-[#E65100] flex items-center justify-center shrink-0 border border-[#E65100]/20 group-hover:scale-105 transition-transform">
+                              <span class="mat-icon text-base">directions_bus</span>
+                            </span>
+                            <div class="flex flex-col min-w-0">
+                              <span class="text-xs font-bold text-[#1F1612] truncate">Bus</span>
+                              <span class="text-[10px] text-[#795548] truncate">Stadt- & Regionalbusse</span>
+                            </div>
+                          </div>
+                          <input
+                            id="chk-bus"
+                            type="checkbox"
+                            formControlName="includeBus"
+                            class="w-4 h-4 text-[#E65100] rounded focus:ring-[#E65100] border-[#D7CCC8] accent-[#E65100] cursor-pointer ml-2 shrink-0"
+                            aria-label="Busse einschließen"
+                          />
+                        </label>
+                      </div>
+                    </div>
                   }
-                </select>
-                
-                <span class="text-[11px] text-[#8D6E63] font-bold shrink-0">:</span>
-                <span class="text-[11px] text-[#8D6E63] font-bold shrink-0 mr-0.5">Nach</span>
-              </div>
+                </div>
 
-              <!-- Destination pills with 4px border radius, filling available width smoothly -->
-              @for (dest of primaryDestinations(); track dest.name) {
-                <button
-                  type="button"
-                  (click)="setDestination(dest)"
-                  [title]="dest.name + ' (' + dest.time + ')'"
-                  [attr.aria-label]="'Schnellziel ' + dest.name + ' auswählen, Fahrtzeit ca. ' + dest.time"
-                  class="flex-1 min-w-[85px] sm:min-w-[95px] px-2 py-0.5 rounded-[4px] bg-[#FAF7F2] hover:bg-[#EDF9F0] hover:text-[#1B4332] hover:border-[#2D6A4F] text-[#4E342E] text-xs font-semibold border border-[#E6DED6] transition-all cursor-pointer shadow-2xs flex items-center justify-between gap-1 shrink-0"
-                  [class.border-[#2D6A4F]]="toStation()?.id === dest.id"
-                  [class.bg-[#EDF9F0]]="toStation()?.id === dest.id"
-                  [class.text-[#1B4332]]="toStation()?.id === dest.id"
-                >
-                  <span class="truncate">{{ dest.name }}</span>
-                  <span class="text-[10px] text-[#8D6E63] font-normal shrink-0">{{ dest.time }}</span>
-                </button>
-              }
+                <!-- Date & Time Row strictly in a single horizontal row on all viewports with tune button outside at the end -->
+                <div class="flex items-center gap-2 w-full pt-0.5">
+                  
+                  <!-- Date Input Container with Calendar Icon & Bespoke Unified Date Popover -->
+                  <div class="relative flex-1 min-w-0">
+                    <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#2D6A4F] pointer-events-none flex items-center z-10" aria-hidden="true">
+                      <span class="mat-icon text-[14px]">calendar_month</span>
+                    </span>
+                    <button
+                      type="button"
+                      id="btn-date-picker"
+                      (click)="toggleDatePickerPopup()"
+                      class="w-full pl-7 pr-2.5 py-1.5 bg-[#FAF7F2] hover:bg-white border border-[#D7CCC8] hover:border-[#2D6A4F] rounded-[4px] text-[#2E1F18] text-xs font-semibold focus:ring-1 focus:ring-[#2D6A4F] focus:border-[#2D6A4F] min-w-0 text-left cursor-pointer transition-colors shadow-2xs flex items-center justify-between"
+                      title="Reisedatum wählen"
+                      aria-label="Reisedatum und Uhrzeit auswählen"
+                      [attr.aria-expanded]="showDatePickerPopup()"
+                    >
+                      <span class="truncate">{{ formattedSelectedDate() }}</span>
+                    </button>
+                  </div>
 
-              <!-- Combo box at the end of the destination wrap with 4px border radius -->
-              <div class="flex-1 min-w-[120px] inline-flex items-center shrink-0">
-                <select
-                  id="select-more-destinations"
-                  (change)="onDropdownDestinationChange($any($event.target).value); $any($event.target).value = ''"
-                  class="w-full px-2 py-0.5 bg-white hover:bg-[#FAF7F2] border border-[#D7CCC8] hover:border-[#1B4332] rounded-[4px] text-[#2D6A4F] text-xs font-bold focus:outline-none focus:ring-1 focus:ring-[#2D6A4F] cursor-pointer shadow-2xs"
-                  title="Weitere Ziele ab dieser Stadt auswählen"
-                  aria-label="Weitere Reiseziele ab dieser Stadt auswählen"
-                >
-                  <option value="" disabled selected>+ Weitere Ziele...</option>
-                  @for (dest of currentHubDestinations(); track dest.id) {
-                    <option [value]="dest.id">{{ dest.name }} ({{ dest.time }})</option>
-                  }
-                </select>
-              </div>
-            </div>
+                  <!-- Time Input with Clock Icon -->
+                  <div class="relative flex-1 min-w-0">
+                    <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#795548] pointer-events-none flex items-center" aria-hidden="true">
+                      <span class="mat-icon text-xs">schedule</span>
+                    </span>
+                    <input
+                      id="input-time"
+                      type="time"
+                      formControlName="time"
+                      (input)="onTimeInputChange($event)"
+                      title="Abfahrtszeit"
+                      aria-label="Abfahrtszeit eingeben"
+                      class="w-full pl-7 pr-2.5 py-1.5 bg-[#FAF7F2] border border-[#D7CCC8] rounded-[4px] text-[#2E1F18] text-xs font-semibold focus:ring-1 focus:ring-[#2D6A4F] focus:border-[#2D6A4F] min-w-0"
+                    />
+                  </div>
+                </div>
 
-            <!-- Date & Time Row strictly in a single horizontal row on all viewports with tune button outside at the end -->
-            <div class="flex items-center gap-2 w-full pt-0.5">
-              
-              <!-- Date Input Container with Calendar Icon & Bespoke Unified Date Popover -->
-              <div class="relative flex-1 min-w-0">
-                <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#2D6A4F] pointer-events-none flex items-center z-10" aria-hidden="true">
-                  <span class="mat-icon text-[14px]">calendar_month</span>
-                </span>
-                <button
-                  type="button"
-                  id="btn-date-picker"
-                  (click)="toggleDatePickerPopup()"
-                  class="w-full pl-7 pr-2.5 py-1.5 bg-[#FAF7F2] hover:bg-white border border-[#D7CCC8] hover:border-[#2D6A4F] rounded-[4px] text-[#2E1F18] text-xs font-semibold focus:ring-1 focus:ring-[#2D6A4F] focus:border-[#2D6A4F] min-w-0 text-left cursor-pointer transition-colors shadow-2xs flex items-center justify-between"
-                  title="Reisedatum wählen"
-                  aria-label="Reisedatum und Uhrzeit auswählen"
-                  [attr.aria-expanded]="showDatePickerPopup()"
-                >
-                  <span class="truncate">{{ formattedSelectedDate() }}</span>
-                </button>
-              </div>
+                <!-- Filters & Search Button -->
+                <div class="pt-2.5 border-t border-[#EDE5DC] flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                  <div class="flex items-center gap-3.5 flex-wrap">
+                    <label class="flex items-center gap-1.5 cursor-pointer select-none">
+                      <input
+                        id="chk-fernverkehr"
+                        type="checkbox"
+                        formControlName="includeFernverkehr"
+                        aria-label="Fernverkehr ICE und IC einbeziehen"
+                        class="w-3.5 h-3.5 text-[#5D4037] rounded focus:ring-[#5D4037] border-[#D7CCC8]"
+                      />
+                      <span class="text-xs text-[#795548] font-semibold">
+                        ICE/IC
+                      </span>
+                    </label>
+                  </div>
 
-              <!-- Time Input with Clock Icon -->
-              <div class="relative flex-1 min-w-0">
-                <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#795548] pointer-events-none flex items-center" aria-hidden="true">
-                  <span class="mat-icon text-xs">schedule</span>
-                </span>
-                <input
-                  id="input-time"
-                  type="time"
-                  formControlName="time"
-                  (input)="onTimeInputChange($event)"
-                  title="Abfahrtszeit"
-                  aria-label="Abfahrtszeit eingeben"
-                  class="w-full pl-7 pr-2.5 py-1.5 bg-[#FAF7F2] border border-[#D7CCC8] rounded-[4px] text-[#2E1F18] text-xs font-semibold focus:ring-1 focus:ring-[#2D6A4F] focus:border-[#2D6A4F] min-w-0"
-                />
-              </div>
-            </div>
-
-            <!-- Filters & Search Button -->
-            <div class="pt-2.5 border-t border-[#EDE5DC] flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-              <div class="flex items-center gap-3.5 flex-wrap">
-                <label class="flex items-center gap-1.5 cursor-pointer select-none">
-                  <input
-                    id="chk-d-ticket"
-                    type="checkbox"
-                    formControlName="dTicketOnly"
-                    aria-label="Nur Deutschlandticket Nahverkehrsverbindungen"
-                    class="w-3.5 h-3.5 text-[#2D6A4F] rounded focus:ring-[#2D6A4F] border-[#D7CCC8]"
-                  />
-                  <span class="text-xs font-bold text-[#1B4332] flex items-center gap-1">
-                    <span>Nur Deutschlandticket</span>
-                    <span class="mat-icon text-[#2D6A4F] text-xs" aria-hidden="true">verified</span>
-                  </span>
-                </label>
-
-                <label class="flex items-center gap-1.5 cursor-pointer select-none">
-                  <input
-                    id="chk-fernverkehr"
-                    type="checkbox"
-                    formControlName="includeFernverkehr"
-                    aria-label="Fernverkehr ICE und IC einbeziehen"
-                    class="w-3.5 h-3.5 text-[#5D4037] rounded focus:ring-[#5D4037] border-[#D7CCC8]"
-                  />
-                  <span class="text-xs text-[#795548] font-semibold">
-                    ICE/IC
-                  </span>
-                </label>
-              </div>
-
-              <!-- Search Button -->
-              <button
-                type="submit"
-                id="btn-search-connections"
-                [disabled]="isLoading() || !toStation()"
-                class="px-5 py-2 bg-[#1B4332] hover:bg-[#132A1E] disabled:bg-[#EFEBE6] disabled:text-[#A1887F] disabled:cursor-not-allowed text-white font-black text-xs tracking-wider rounded-lg shadow-xs hover:shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-                aria-label="Verbindungen suchen"
-              >
-                @if (isLoading()) {
-                  <span class="mat-icon animate-spin text-sm" aria-hidden="true">sync</span>
-                  <span>LADEN...</span>
-                } @else {
-                  <span class="mat-icon text-sm" aria-hidden="true">search</span>
-                  <span>VERBINDUNGEN SUCHEN</span>
-                }
-              </button>
-            </div>
+                  <!-- Search Button -->
+                  <button
+                    type="submit"
+                    id="btn-search-connections"
+                    [disabled]="isLoading() || !toStation()"
+                    class="px-5 py-2 bg-[#1B4332] hover:bg-[#132A1E] disabled:bg-[#EFEBE6] disabled:text-[#A1887F] disabled:cursor-not-allowed text-white font-black text-xs tracking-wider rounded-lg shadow-xs hover:shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                    aria-label="Verbindungen suchen"
+                  >
+                    @if (isLoading()) {
+                      <span class="mat-icon animate-spin text-sm" aria-hidden="true">sync</span>
+                      <span>LADEN...</span>
+                    } @else {
+                      <span class="mat-icon text-sm" aria-hidden="true">search</span>
+                      <span>VERBINDUNGEN SUCHEN</span>
+                    }
+                  </button>
+                </div>
 
           </div>
         }
@@ -730,9 +821,6 @@ interface CuratedDestination {
                       aria-label="Klick übernimmt in Startbahnhof Von"
                     >
                       <span>Von</span>
-                      @if (activeInput() === 'from') {
-                        <span class="text-[9px] opacity-80">(Cursor)</span>
-                      }
                     </button>
                     <button
                       type="button"
@@ -745,9 +833,6 @@ interface CuratedDestination {
                       aria-label="Klick übernimmt in Zielbahnhof Nach"
                     >
                       <span>Nach</span>
-                      @if (activeInput() === 'to') {
-                        <span class="text-[9px] opacity-80">(Cursor)</span>
-                      }
                     </button>
                   </div>
                 </div>
@@ -970,6 +1055,17 @@ interface CuratedDestination {
                           <span class="text-[11px] font-black uppercase tracking-wider text-[#1B4332] bg-[#EDF9F0] px-2 py-0.5 rounded-md border border-[#B7E4C7]">
                             Aktive Route auf Karte
                           </span>
+                          @if (activeJ.isDeutschlandticketValid) {
+                            <span class="inline-flex items-center gap-1 text-[11px] font-bold text-[#1B4332] bg-[#EDF9F0] px-2 py-0.5 rounded-md border border-[#B7E4C7]" title="Die gewählte Route ist vollständig mit dem Deutschlandticket abgedeckt">
+                              <span class="mat-icon text-xs text-[#2D6A4F]" aria-hidden="true">check_circle</span>
+                              <span>100% Deutschlandticket abgedeckt</span>
+                            </span>
+                          } @else {
+                            <span class="inline-flex items-center gap-1 text-[11px] font-bold text-[#92400E] bg-[#FEF3C7] px-2 py-0.5 rounded-md border border-[#FDE68A]" title="Teilstrecken dieser Route (z. B. Fernverkehr) sind nicht mit dem Deutschlandticket abgedeckt">
+                              <span class="mat-icon text-xs text-[#B45309]" aria-hidden="true">warning</span>
+                              <span>Nicht vollständig im D-Ticket</span>
+                            </span>
+                          }
                           <span class="text-xs text-[#795548] font-bold truncate">
                             ab {{ activeJ.origin.name }} nach {{ activeJ.destination.name }}
                           </span>
@@ -1071,20 +1167,34 @@ interface CuratedDestination {
                           <div>
                             <!-- Header badge -->
                             <div class="flex items-center justify-between gap-1 mb-1.5">
-                              @if (isSelected) {
-                                <span class="inline-flex items-center gap-1 text-[10px] font-black text-[#1B4332] bg-white px-2 py-0.5 rounded-full border border-[#B7E4C7]">
-                                  <span class="inline-block w-1.5 h-1.5 rounded-full bg-[#2D6A4F] animate-pulse"></span>
-                                  Auf Karte aktiv
-                                </span>
-                              } @else if ($index === 0) {
-                                <span class="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#EDF9F0] text-[#1B4332]">
-                                  Empfehlung
-                                </span>
-                              } @else {
-                                <span class="text-[10px] text-[#795548] font-bold">
-                                  Option {{ $index + 1 }}
-                                </span>
-                              }
+                              <div class="flex items-center gap-1 flex-wrap">
+                                @if (isSelected) {
+                                  <span class="inline-flex items-center gap-1 text-[10px] font-black text-[#1B4332] bg-white px-2 py-0.5 rounded-full border border-[#B7E4C7]">
+                                    <span class="inline-block w-1.5 h-1.5 rounded-full bg-[#2D6A4F] animate-pulse"></span>
+                                    Auf Karte aktiv
+                                  </span>
+                                } @else if ($index === 0) {
+                                  <span class="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#EDF9F0] text-[#1B4332]">
+                                    Empfehlung
+                                  </span>
+                                } @else {
+                                  <span class="text-[10px] text-[#795548] font-bold">
+                                    Option {{ $index + 1 }}
+                                  </span>
+                                }
+
+                                @if (journey.isDeutschlandticketValid) {
+                                  <span class="inline-flex items-center gap-0.5 text-[10px] font-bold text-[#1B4332] bg-[#EDF9F0] px-1.5 py-0.5 rounded-full border border-[#B7E4C7]" title="100% mit dem Deutschlandticket abgedeckt">
+                                    <span class="mat-icon text-[11px] text-[#2D6A4F] leading-none" aria-hidden="true">check_circle</span>
+                                    <span>D-Ticket</span>
+                                  </span>
+                                } @else {
+                                  <span class="inline-flex items-center gap-0.5 text-[10px] font-bold text-[#92400E] bg-[#FEF3C7] px-1.5 py-0.5 rounded-full border border-[#FDE68A]" title="Nicht vollständig mit dem Deutschlandticket abgedeckt">
+                                    <span class="mat-icon text-[11px] text-[#B45309] leading-none" aria-hidden="true">warning</span>
+                                    <span>Teilweise</span>
+                                  </span>
+                                }
+                              </div>
 
                               <span class="text-xs font-black text-[#1F1612]">
                                 {{ formatHvvDuration(journey.durationMinutes) }}
@@ -1133,7 +1243,17 @@ interface CuratedDestination {
 
                           <!-- Action row -->
                           <div class="pt-2 border-t border-[#EDE5DC] flex items-center justify-between text-xs">
-                            <span class="text-[11px] text-[#1B4332] font-bold">100% D-Ticket</span>
+                            @if (journey.isDeutschlandticketValid) {
+                              <span class="text-[11px] text-[#1B4332] font-bold flex items-center gap-1">
+                                <span class="mat-icon text-xs text-[#2D6A4F]" aria-hidden="true">check_circle</span>
+                                <span>100% D-Ticket</span>
+                              </span>
+                            } @else {
+                              <span class="text-[11px] text-[#92400E] font-bold flex items-center gap-1">
+                                <span class="mat-icon text-xs text-[#B45309]" aria-hidden="true">warning</span>
+                                <span>Zusatzticket</span>
+                              </span>
+                            }
                             <button
                               type="button"
                               (click)="openJourneyDetail(journey); $event.stopPropagation()"
@@ -1207,6 +1327,17 @@ interface CuratedDestination {
                             <span class="text-[11px] font-bold text-[#2D6A4F] bg-[#EDF9F0] px-2 py-0.5 rounded-md border border-[#B7E4C7]">
                               {{ formatTime(activeJ.departure) }} - {{ formatTime(activeJ.arrival) }}
                             </span>
+                            @if (activeJ.isDeutschlandticketValid) {
+                              <span class="inline-flex items-center gap-1 text-[11px] font-bold text-[#1B4332] bg-[#EDF9F0] px-2 py-0.5 rounded-md border border-[#B7E4C7]">
+                                <span class="mat-icon text-xs text-[#2D6A4F]" aria-hidden="true">check_circle</span>
+                                <span>100% D-Ticket</span>
+                              </span>
+                            } @else {
+                              <span class="inline-flex items-center gap-1 text-[11px] font-bold text-[#92400E] bg-[#FEF3C7] px-2 py-0.5 rounded-md border border-[#FDE68A]">
+                                <span class="mat-icon text-xs text-[#B45309]" aria-hidden="true">warning</span>
+                                <span>Zusatzticket</span>
+                              </span>
+                            }
                           }
                         </div>
 
@@ -1334,17 +1465,36 @@ interface CuratedDestination {
                         class="group bg-white hover:bg-[#FAF7F2] rounded-2xl border transition-all duration-150 cursor-pointer shadow-xs hover:shadow-md relative outline-none focus-visible:ring-2 focus-visible:ring-[#2D6A4F] overflow-hidden"
                         [class.border-[#2D6A4F]]="$index === 0"
                         [class.border-[#E6DED6]]="$index !== 0"
-                        [attr.aria-label]="'Fahrt von ' + formatTime(journey.departure) + ' bis ' + formatTime(journey.arrival) + ' Uhr. Detalles anzeigen.'"
+                        [attr.aria-label]="'Fahrt von ' + formatTime(journey.departure) + ' bis ' + formatTime(journey.arrival) + ' Uhr. Details anzeigen.'"
                       >
                         <div class="p-4 sm:p-5 space-y-2.5">
-                          <!-- 1. Empfehlung Badge -->
-                          @if ($index === 0) {
-                            <div>
+                          <!-- 1. Empfehlung Badge & D-Ticket Indicator -->
+                          <div class="flex items-center gap-2 flex-wrap">
+                            @if ($index === 0) {
                               <span class="inline-block px-2.5 py-0.5 rounded-md text-xs font-semibold bg-[#EDF9F0] text-[#1B4332]">
                                 Unsere Empfehlung
                               </span>
-                            </div>
-                          }
+                            }
+
+                            <!-- Deutschlandticket Indikator -->
+                            @if (journey.isDeutschlandticketValid) {
+                              <span
+                                class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#EDF9F0] text-[#1B4332] border border-[#B7E4C7] shadow-2xs"
+                                title="Diese Route ist vollständig (100%) mit dem Deutschlandticket abgedeckt"
+                              >
+                                <span class="mat-icon text-[14px] text-[#2D6A4F] leading-none" aria-hidden="true">check_circle</span>
+                                <span>100% Deutschlandticket</span>
+                              </span>
+                            } @else {
+                              <span
+                                class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A] shadow-2xs"
+                                title="Diese Route enthält Teilstrecken (z. B. Fernverkehr), die nicht mit dem Deutschlandticket abgedeckt sind"
+                              >
+                                <span class="mat-icon text-[14px] text-[#B45309] leading-none" aria-hidden="true">warning</span>
+                                <span>Nicht voll im D-Ticket</span>
+                              </span>
+                            }
+                          </div>
 
                           <!-- 2. Header: Salida ➔ Llegada (live) & Duración -->
                           <div class="flex items-baseline justify-between gap-3 flex-wrap">
@@ -1416,9 +1566,15 @@ interface CuratedDestination {
 
                           <!-- 5. Ticket Divider & Line with direct 'Auf Karte' action -->
                           <div class="pt-3 border-t border-[#EDE5DC] flex items-center justify-between text-xs font-semibold gap-2 flex-wrap">
-                            <div class="flex items-center gap-1.5 text-[#1B4332]">
-                              <span class="mat-icon text-sm text-[#2D6A4F]" aria-hidden="true">confirmation_number</span>
-                              <span>Tickets ab 0,00 € • 100% D-Ticket gültig</span>
+                            <div class="flex items-center gap-1.5" [class.text-[#1B4332]]="journey.isDeutschlandticketValid" [class.text-[#92400E]]="!journey.isDeutschlandticketValid">
+                              <span class="mat-icon text-sm" [class.text-[#2D6A4F]]="journey.isDeutschlandticketValid" [class.text-[#B45309]]="!journey.isDeutschlandticketValid" aria-hidden="true">
+                                {{ journey.isDeutschlandticketValid ? 'confirmation_number' : 'warning' }}
+                              </span>
+                              @if (journey.isDeutschlandticketValid) {
+                                <span>100% mit Deutschlandticket abgedeckt • 0,00 € Zusatztarif</span>
+                              } @else {
+                                <span>Zusatzticket erforderlich • Nicht vollständig im D-Ticket</span>
+                              }
                             </div>
                             <div class="flex items-center gap-2">
                               <button
@@ -1432,7 +1588,7 @@ interface CuratedDestination {
                                 <span>Auf Karte</span>
                               </button>
                               <div class="flex items-center gap-1 text-[#795548] group-hover:text-[#1B4332] transition-colors font-bold">
-                                <span>Detalles</span>
+                                <span>Details</span>
                                 <span class="mat-icon text-xs">arrow_forward</span>
                               </div>
                             </div>
@@ -2095,153 +2251,11 @@ export class PlannerView implements OnInit, AfterViewInit {
   readonly showVerbindungenHeader = signal<boolean>(false);
   readonly showWeather = signal<boolean>(false);
   readonly discoveryCategory = signal<'all' | 'kueste' | 'natur' | 'kultur'>('all');
-  readonly selectedStartingHub = signal<string>('Hamburg');
-  readonly showAllPopularDestinations = signal<boolean>(false);
   readonly showTimePickerPopup = signal<boolean>(false);
   readonly showDatePickerPopup = signal<boolean>(false);
   readonly calendarViewDate = signal<Date>(new Date());
   readonly selectedDate = signal<string>(this.getCurrentDateString());
   readonly selectedTime = signal<string>(this.getCurrentTimeString());
-
-  readonly startingHubs = [
-    {
-      label: 'Hamburg',
-      station: { id: '8002549', name: 'Hamburg Hbf', location: { latitude: 53.552736, longitude: 10.006909 } },
-      destinations: [
-        { name: 'Lübeck Hbf', id: '8000237', lat: 53.8672, lon: 10.6698, time: '0:43h' },
-        { name: 'Kiel Hbf', id: '8003368', lat: 54.3149, lon: 10.1320, time: '1:13h' },
-        { name: 'Bremen Hbf', id: '8000050', lat: 53.0834, lon: 8.8138, time: '1:05h' },
-        { name: 'Lüneburg', id: '8003762', lat: 53.2505, lon: 10.4191, time: '0:30h' },
-        { name: 'Schwerin Hbf', id: '8000339', lat: 53.6343, lon: 11.4075, time: '1:15h' },
-        { name: 'Westerland (Sylt)', id: '8006423', lat: 54.9073, lon: 8.3097, time: '3:10h' },
-        { name: 'Rostock Hbf', id: '8000309', lat: 54.0782, lon: 12.1311, time: '2:05h' },
-        { name: 'Hannover Hbf', id: '8000152', lat: 52.3767, lon: 9.7410, time: '1:20h' }
-      ]
-    },
-    {
-      label: 'Berlin',
-      station: { id: '8011160', name: 'Berlin Hbf', location: { latitude: 52.525592, longitude: 13.369545 } },
-      destinations: [
-        { name: 'Potsdam Hbf', id: '8010283', lat: 52.3917, lon: 13.0673, time: '0:25h' },
-        { name: 'Frankfurt (Oder)', id: '8010114', lat: 52.3364, lon: 14.5422, time: '1:00h' },
-        { name: 'Brandenburg Hbf', id: '8010058', lat: 52.3976, lon: 12.5636, time: '0:45h' },
-        { name: 'Cottbus Hbf', id: '8010078', lat: 51.7516, lon: 14.3218, time: '1:15h' },
-        { name: 'Rostock Hbf', id: '8000309', lat: 54.0782, lon: 12.1311, time: '2:20h' },
-        { name: 'Leipzig Hbf', id: '8010205', lat: 51.3453, lon: 12.3814, time: '1:45h' },
-        { name: 'Magdeburg Hbf', id: '8010224', lat: 52.1306, lon: 11.6276, time: '1:35h' },
-        { name: 'Stralsund Hbf', id: '8010338', lat: 54.3082, lon: 13.0784, time: '3:00h' }
-      ]
-    },
-    {
-      label: 'Bremen',
-      station: { id: '8000050', name: 'Bremen Hbf', location: { latitude: 53.0834, longitude: 8.8138 } },
-      destinations: [
-        { name: 'Hamburg Hbf', id: '8002549', lat: 53.552736, lon: 10.006909, time: '1:05h' },
-        { name: 'Bremerhaven Hbf', id: '8000051', lat: 53.5350, lon: 8.5997, time: '0:35h' },
-        { name: 'Oldenburg(Oldb)', id: '8000291', lat: 53.1436, lon: 8.2223, time: '0:30h' },
-        { name: 'Hannover Hbf', id: '8000152', lat: 52.3767, lon: 9.7410, time: '1:20h' },
-        { name: 'Osnabrück Hbf', id: '8000294', lat: 52.2729, lon: 8.0617, time: '1:00h' },
-        { name: 'Münster(Westf)', id: '8000263', lat: 51.9566, lon: 7.6358, time: '1:25h' },
-        { name: 'Cuxhaven', id: '8000067', lat: 53.8617, lon: 8.7025, time: '1:40h' },
-        { name: 'Wilhelmshaven', id: '8000251', lat: 53.5186, lon: 8.1147, time: '1:10h' }
-      ]
-    },
-    {
-      label: 'Hannover',
-      station: { id: '8000152', name: 'Hannover Hbf', location: { latitude: 52.3767, longitude: 9.7410 } },
-      destinations: [
-        { name: 'Hamburg Hbf', id: '8002549', lat: 53.552736, lon: 10.006909, time: '1:20h' },
-        { name: 'Bremen Hbf', id: '8000050', lat: 53.0834, lon: 8.8138, time: '1:20h' },
-        { name: 'Braunschweig Hbf', id: '8000049', lat: 52.2523, lon: 10.5401, time: '0:35h' },
-        { name: 'Göttingen', id: '8000128', lat: 51.5368, lon: 9.9264, time: '0:50h' },
-        { name: 'Goslar', id: '8000130', lat: 51.9114, lon: 10.4216, time: '1:15h' },
-        { name: 'Bielefeld Hbf', id: '8000036', lat: 52.0292, lon: 8.5327, time: '1:05h' },
-        { name: 'Wolfsburg Hbf', id: '8000252', lat: 52.4287, lon: 10.7876, time: '0:45h' },
-        { name: 'Kassel-Wilhelmshöhe', id: '8003200', lat: 51.3130, lon: 9.4468, time: '1:35h' }
-      ]
-    },
-    {
-      label: 'Kiel',
-      station: { id: '8003368', name: 'Kiel Hbf', location: { latitude: 54.3149, longitude: 10.1320 } },
-      destinations: [
-        { name: 'Hamburg Hbf', id: '8002549', lat: 53.552736, lon: 10.006909, time: '1:13h' },
-        { name: 'Lübeck Hbf', id: '8000237', lat: 53.8672, lon: 10.6698, time: '1:05h' },
-        { name: 'Flensburg', id: '8000103', lat: 54.7744, lon: 9.4367, time: '1:15h' },
-        { name: 'Husum', id: '8000183', lat: 54.4764, lon: 9.0558, time: '0:50h' },
-        { name: 'Rendsburg', id: '8000312', lat: 54.3013, lon: 9.6644, time: '0:25h' },
-        { name: 'Neumünster', id: '8000277', lat: 54.0744, lon: 9.9806, time: '0:20h' },
-        { name: 'Eckernförde', id: '8000089', lat: 54.4697, lon: 9.8358, time: '0:30h' },
-        { name: 'Schleswig', id: '8000329', lat: 54.5058, lon: 9.5392, time: '0:40h' }
-      ]
-    },
-    {
-      label: 'Lübeck',
-      station: { id: '8000237', name: 'Lübeck Hbf', location: { latitude: 53.8672, longitude: 10.6698 } },
-      destinations: [
-        { name: 'Hamburg Hbf', id: '8002549', lat: 53.552736, lon: 10.006909, time: '0:43h' },
-        { name: 'Kiel Hbf', id: '8003368', lat: 54.3149, lon: 10.1320, time: '1:05h' },
-        { name: 'Travemünde Strand', id: '8005929', lat: 53.9592, lon: 10.8711, time: '0:20h' },
-        { name: 'Schwerin Hbf', id: '8000339', lat: 53.6343, lon: 11.4075, time: '1:05h' },
-        { name: 'Lüneburg', id: '8003762', lat: 53.2505, lon: 10.4191, time: '1:10h' },
-        { name: 'Bad Oldesloe', id: '8000020', lat: 53.8064, lon: 10.3694, time: '0:15h' },
-        { name: 'Neustadt(Holst)', id: '8004338', lat: 54.1075, lon: 10.8142, time: '0:35h' },
-        { name: 'Rostock Hbf', id: '8000309', lat: 54.0782, lon: 12.1311, time: '1:50h' }
-      ]
-    },
-    {
-      label: 'Köln',
-      station: { id: '8000207', name: 'Köln Hbf', location: { latitude: 50.9432, longitude: 6.9586 } },
-      destinations: [
-        { name: 'Düsseldorf Hbf', id: '8000085', lat: 51.2198, lon: 6.7943, time: '0:30h' },
-        { name: 'Bonn Hbf', id: '8000044', lat: 50.7323, lon: 7.0970, time: '0:20h' },
-        { name: 'Aachen Hbf', id: '8000001', lat: 50.7678, lon: 6.0915, time: '0:50h' },
-        { name: 'Koblenz Hbf', id: '8000206', lat: 50.3506, lon: 7.5886, time: '0:55h' },
-        { name: 'Wuppertal Hbf', id: '8000266', lat: 51.2543, lon: 7.1492, time: '0:35h' },
-        { name: 'Mönchengladbach', id: '8000253', lat: 51.1963, lon: 6.4461, time: '0:45h' },
-        { name: 'Mainz Hbf', id: '8000240', lat: 50.0012, lon: 8.2588, time: '1:40h' },
-        { name: 'Siegen Hbf', id: '8000086', lat: 50.8753, lon: 8.0169, time: '1:35h' }
-      ]
-    },
-    {
-      label: 'München',
-      station: { id: '8000261', name: 'München Hbf', location: { latitude: 48.1402, longitude: 11.5583 } },
-      destinations: [
-        { name: 'Augsburg Hbf', id: '8000013', lat: 48.3654, lon: 10.8856, time: '0:40h' },
-        { name: 'Garmisch-Partenk.', id: '8000122', lat: 47.4919, lon: 11.0963, time: '1:20h' },
-        { name: 'Salzburg Hbf', id: '8100002', lat: 47.8130, lon: 13.0456, time: '1:45h' },
-        { name: 'Regensburg Hbf', id: '8000311', lat: 49.0117, lon: 12.0991, time: '1:30h' },
-        { name: 'Rosenheim', id: '8000320', lat: 47.8504, lon: 12.1192, time: '0:40h' },
-        { name: 'Ingolstadt Hbf', id: '8000185', lat: 48.7443, lon: 11.4361, time: '0:50h' },
-        { name: 'Kempten(Allgäu)', id: '8000199', lat: 47.7197, lon: 10.3164, time: '1:25h' },
-        { name: 'Landshut(Bay)Hbf', id: '8000223', lat: 48.5444, lon: 12.1436, time: '0:45h' }
-      ]
-    },
-    {
-      label: 'Frankfurt',
-      station: { id: '8000105', name: 'Frankfurt(Main)Hbf', location: { latitude: 50.1071, longitude: 8.6637 } },
-      destinations: [
-        { name: 'Wiesbaden Hbf', id: '8000250', lat: 50.0710, lon: 8.2435, time: '0:35h' },
-        { name: 'Mainz Hbf', id: '8000240', lat: 50.0012, lon: 8.2588, time: '0:35h' },
-        { name: 'Heidelberg Hbf', id: '8000156', lat: 49.4036, lon: 8.6756, time: '0:55h' },
-        { name: 'Fulda', id: '8000115', lat: 50.5547, lon: 9.6841, time: '1:15h' },
-        { name: 'Darmstadt Hbf', id: '8000068', lat: 49.8725, lon: 8.6297, time: '0:20h' },
-        { name: 'Mannheim Hbf', id: '8000244', lat: 49.4794, lon: 8.4689, time: '0:40h' },
-        { name: 'Gießen', id: '8000124', lat: 50.5828, lon: 8.6625, time: '0:45h' },
-        { name: 'Würzburg Hbf', id: '8000260', lat: 49.8017, lon: 9.9356, time: '1:10h' }
-      ]
-    }
-  ];
-
-  readonly currentHubDestinations = computed(() => {
-    const hub = this.startingHubs.find(h => h.label === this.selectedStartingHub()) ?? this.startingHubs[0];
-    return hub.destinations;
-  });
-
-  readonly primaryDestinations = computed(() => {
-    const dests = this.currentHubDestinations();
-    // Return 4 destinations to form exactly 2 balanced rows with starting selector on row 1 and dropdown on row 2
-    return dests.slice(0, Math.min(dests.length, 4));
-  });
 
   readonly formattedSelectedDate = computed(() => {
     const dStr = this.selectedDate();
@@ -2324,13 +2338,6 @@ export class PlannerView implements OnInit, AfterViewInit {
     }
 
     return days;
-  });
-
-  readonly visiblePopularDestinations = computed(() => {
-    const dests = this.currentHubDestinations();
-    return this.showAllPopularDestinations()
-      ? dests
-      : dests.slice(0, 3);
   });
 
   readonly curatedDestinations: CuratedDestination[] = [
@@ -2446,8 +2453,27 @@ export class PlannerView implements OnInit, AfterViewInit {
     date: [this.getCurrentDateString(), Validators.required],
     time: [this.getCurrentTimeString(), Validators.required],
     dTicketOnly: [true],
+    includeRegional: [true],
+    includeSuburban: [true],
+    includeSubway: [true],
+    includeBus: [true],
     includeFernverkehr: [false]
   });
+
+  readonly isTransitModesExpanded = signal<boolean>(true);
+
+  toggleTransitModesExpanded(): void {
+    this.isTransitModesExpanded.update(v => !v);
+  }
+
+  setAllTransitModes(enable: boolean): void {
+    this.searchForm.patchValue({
+      includeRegional: enable,
+      includeSuburban: enable,
+      includeSubway: enable,
+      includeBus: enable
+    });
+  }
 
   readonly sortedJourneys = computed(() => {
     const list = [...this.journeys()];
@@ -2930,42 +2956,6 @@ export class PlannerView implements OnInit, AfterViewInit {
     this.viaStations.update(list => list.map(v => v.id === id ? { ...v, query } : v));
   }
 
-  setDestination(dest: { name: string; id: string; lat: number; lon: number }) {
-    this.toStation.set({
-      id: dest.id,
-      name: dest.name,
-      location: { latitude: dest.lat, longitude: dest.lon }
-    });
-    this.toStationQuery.set(dest.name);
-    this.checkAndTriggerAutoSearch('to');
-  }
-
-  onDropdownDestinationChange(destId: string) {
-    if (!destId) return;
-    const dest = this.currentHubDestinations().find(d => d.id === destId);
-    if (dest) {
-      this.setDestination(dest);
-    }
-  }
-
-  onStartingHubChange(hubLabel: string) {
-    this.selectedStartingHub.set(hubLabel);
-    const hub = this.startingHubs.find(h => h.label === hubLabel);
-    if (hub) {
-      this.fromStation.set(hub.station);
-      // If the toStation matches the new origin station, select the first destination of the new hub
-      if (this.toStation()?.id === hub.station.id && hub.destinations.length > 0) {
-        const first = hub.destinations[0];
-        this.toStation.set({
-          id: first.id,
-          name: first.name,
-          location: { latitude: first.lat, longitude: first.lon }
-        });
-      }
-      this.onSearchSubmit();
-    }
-  }
-
   selectCuratedDestination(dest: CuratedDestination) {
     this.fromStation.set({
       id: '8002549',
@@ -3258,6 +3248,12 @@ export class PlannerView implements OnInit, AfterViewInit {
       departureTime: depDateTime,
       dTicketOnly: formVal.dTicketOnly ?? true,
       includeFernverkehr: formVal.includeFernverkehr ?? false,
+      products: {
+        regional: formVal.includeRegional ?? true,
+        suburban: formVal.includeSuburban ?? true,
+        subway: formVal.includeSubway ?? true,
+        bus: formVal.includeBus ?? true,
+      },
       isFromCurrentLocation: isFromCurrentLocation,
       currentLocationCoords: isFromCurrentLocation ? (this.transitService.userLocation() || undefined) : undefined
     });
