@@ -311,6 +311,11 @@
         </div>
 
         <!-- ============================================================== -->
+        <!-- CO2-BILANZ & KLIMAVORTEIL (INTERAKTIVE ANZEIGE MIT OVERLAY)    -->
+        <!-- ============================================================== -->
+        <app-co2-balance-badge [journey]="journey" variant="detailed"></app-co2-balance-badge>
+
+        <!-- ============================================================== -->
         <!-- ANIMATED WEATHER SHOWCASE CARD (OCCUPYING THE EXACT SPACE)     -->
         <!-- ============================================================== -->
         @if (destinationWeather(); as weather) {
@@ -804,10 +809,33 @@
                 <span class="w-1.5 h-1.5 rounded-full bg-[#1F1612]"></span>
               </div>
 
-              <!-- Right transfer text: Steige um (X min zu Fuß, Y min warten) -->
-              <div class="flex-1 min-w-0 flex items-center gap-2 text-sm sm:text-base font-semibold text-[#1F1612]">
-                <span class="mat-icon text-lg text-[#1F1612]">sync_alt</span>
-                <span>{{ getTransferSummary(journey, legIdx) }}</span>
+              <!-- Right transfer text: Steige um (X min zu Fuß, Y min warten) with criteria note -->
+              <div class="flex-1 min-w-0 space-y-1">
+                <div class="flex items-center gap-2 text-sm sm:text-base font-bold text-[#1F1612] flex-wrap">
+                  <span class="mat-icon text-lg text-[#1B4332]">sync_alt</span>
+                  <span>{{ getTransferSummary(journey, legIdx) }}</span>
+                  @if (getTransferDetail(journey, legIdx); as td) {
+                    <span
+                      class="px-2 py-0.5 rounded-full text-[11px] font-bold border"
+                      [class]="td.transferQuality === 'tight' ? 'bg-[#FFF3E0] text-[#E65100] border-[#FFE0B2]' : 'bg-[#EDF9F0] text-[#1B4332] border-[#B7E4C7]'"
+                    >
+                      {{ td.transferQuality === 'tight' ? '⚠️ Knapper Umstieg' : '✓ Ausreichend Puffer' }}
+                    </span>
+                    @if (td.categoryLabel) {
+                      <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white border border-[#E6DED6] text-[#795548]">
+                        {{ td.categoryLabel }}
+                      </span>
+                    }
+                  }
+                </div>
+                @if (getTransferDetail(journey, legIdx); as td) {
+                  @if (td.note) {
+                    <p class="text-xs text-[#5D4037] flex items-start gap-1 font-medium bg-[#FAF7F2] p-2 rounded-lg border border-[#EDE5DC]">
+                      <span class="mat-icon text-xs text-[#2D6A4F] shrink-0 mt-0.5">info</span>
+                      <span>{{ td.note }}</span>
+                    </p>
+                  }
+                }
               </div>
             </div>
           }

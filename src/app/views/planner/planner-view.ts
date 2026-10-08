@@ -19,6 +19,7 @@ import { WeatherService } from '../../services/weather.service';
 import { ALL_GERMAN_STATIONS } from '../../data/stations-data';
 import { StationInput } from '../../components/station-input/station-input';
 import { MapView } from '../../components/map/map-view';
+import { Co2BalanceBadge } from '../../components/co2-balance-badge/co2-balance-badge';
 
 export interface NearbyStationDisplay extends Station {
   distKm: number;
@@ -61,16 +62,16 @@ interface CuratedDestination {
 @Component({
   selector: 'app-planner-view',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CommonModule, ReactiveFormsModule, StationInput, MapView],
+  imports: [CommonModule, ReactiveFormsModule, StationInput, MapView, Co2BalanceBadge],
   template: `
     <div class="space-y-5">
       
       <!-- PRIMARY GRID LAYOUT: Connection Planner & Results (Left) + 'Entdecke Deutschland' Highlights (Right) -->
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
         
-        <!-- LEFT COLUMN: Minimalist Connection Planner & Direct Results underneath -->
-        <div class="lg:col-span-7 space-y-5">
-          <!-- CARD 1: Minimalist Connection Planner (White container as unified background - maximum width & space) -->
+        <!-- LEFT COLUMN: Connection Planner & Direct Results underneath (More width and screen presence) -->
+        <div class="lg:col-span-8 space-y-5">
+          <!-- CARD 1: Connection Planner Hero Card (Spacious container with high visual hierarchy) -->
           <div id="planner-card" class="relative bg-white rounded-2xl border border-[#E6DED6] shadow-xs overflow-visible z-30">
           
             <!-- Eco Badge: centered horizontally in the middle of the main container and floating right on the top line -->
@@ -82,137 +83,201 @@ interface CuratedDestination {
             <!-- Form Area spanning full width of the white card -->
             <form [formGroup]="searchForm" (ngSubmit)="onSearchSubmit()" class="w-full">
               
-              <!-- Route inputs section directly on the white background (no nested borders/margins) -->
-              <div class="p-3 sm:p-4 pb-2.5 relative w-full">
-                <div class="flex items-stretch relative">
-                  
-                  <!-- Left route indicator rail (Google Maps style) -->
-                  <div class="w-8 sm:w-9 flex flex-col items-center pt-3 pb-3 shrink-0 select-none pointer-events-none mr-1.5 sm:mr-2">
-                    <!-- Origin marker: Green circle -->
-                    <div class="w-3.5 h-3.5 rounded-full border-2 border-[#2D6A4F] bg-white shrink-0 shadow-2xs"></div>
-                    
-                    <!-- Intermediate line + via stop dots if any -->
-                    @if (viaStations().length > 0) {
-                      @for (via of viaStations(); track via.id) {
-                        <div class="w-0.5 flex-1 min-h-[14px] bg-[#D7CCC8] my-1"></div>
-                        <div class="w-3 h-3 rounded-full border-2 border-[#D97706] bg-white shrink-0 shadow-2xs" title="Zwischenhalt"></div>
+              <!-- Route inputs section: Spacious Hero Cards for Origin & Destination with high visual relevance -->
+              <div class="p-5 sm:p-6 lg:p-7 relative w-full space-y-4">
+                
+                <!-- 1. STARTBAHNHOF (VON) - PROMINENT HERO CARD -->
+                <div 
+                  class="relative rounded-2xl border-2 transition-all duration-200 p-4 sm:p-5 bg-[#FAFDF9] shadow-xs hover:shadow-sm"
+                  [class.border-[#2D6A4F]]="activeInput() === 'from'"
+                  [class.ring-4]="activeInput() === 'from'"
+                  [class.ring-[#2D6A4F]/20]="activeInput() === 'from'"
+                  [class.bg-white]="activeInput() === 'from'"
+                  [class.border-[#D1C7BD]]="activeInput() !== 'from'"
+                  [class.hover:border-[#2D6A4F]/60]="activeInput() !== 'from'"
+                >
+                  <div class="flex items-center justify-between gap-2 mb-2">
+                    <div class="flex items-center gap-2.5 min-w-0">
+                      <span class="w-4 h-4 rounded-full border-2 border-[#2D6A4F] bg-white ring-2 ring-[#2D6A4F]/30 shrink-0 flex items-center justify-center">
+                        <span class="w-1.5 h-1.5 rounded-full bg-[#2D6A4F]"></span>
+                      </span>
+                      <span class="text-xs sm:text-sm font-black uppercase tracking-wider text-[#2D6A4F] truncate">
+                        Startbahnhof (Von)
+                      </span>
+                    </div>
+
+                    <div class="flex items-center gap-2 shrink-0">
+                      @if (fromStation()) {
+                        <span class="px-2.5 py-1 rounded-full bg-[#EDF9F0] text-[#1B4332] text-xs font-black border border-[#B7E4C7] shrink-0 flex items-center gap-1.5">
+                          <span class="mat-icon text-sm text-[#2D6A4F]">check_circle</span>
+                          <span>Ausgewählt</span>
+                        </span>
                       }
-                    }
-                    <div class="w-0.5 flex-1 min-h-[18px] bg-[#D7CCC8] my-1"></div>
-                    
-                    <!-- Destination marker: Dark pin/square -->
-                    <div class="w-3.5 h-3.5 rounded-xs bg-[#1F1612] shrink-0 shadow-2xs flex items-center justify-center">
-                      <div class="w-1 h-1 bg-white rounded-full"></div>
-                    </div>
-                  </div>
-
-                  <!-- Text inputs container reaching cleanly edge-to-edge -->
-                  <div class="flex-1 min-w-0 pr-10 sm:pr-12">
-                    <!-- Start Station (Flush) -->
-                    <div>
-                      <app-station-input
-                        [variant]="'flush'"
-                        [showLabel]="false"
-                        label=""
-                        placeholder="Von (Startbahnhof oder Haltestelle)"
-                        iconName=""
-                        inputId="input-from-station"
-                        [initialStation]="fromStation()"
-                        [allowCurrentLocation]="true"
-                        [isCursorActive]="activeInput() === 'from'"
-                        matchContainerSelector="#planner-card"
-                        (stationChange)="onFromStationChange($event)"
-                        (queryChange)="fromStationQuery.set($event)"
-                        (inputFocus)="activeInput.set('from')"
-                      ></app-station-input>
-                    </div>
-
-                    <!-- Subtle hairline divider -->
-                    <div class="h-px bg-[#EFEBE6] w-full my-0.5"></div>
-
-                    <!-- Intermediate stations (Via) -->
-                    @for (via of viaStations(); track via.id; let idx = $index) {
-                      <div class="relative flex items-center">
-                        <div class="flex-1 min-w-0">
-                          <app-station-input
-                            [variant]="'flush'"
-                            [showLabel]="false"
-                            label=""
-                            [placeholder]="'Zwischenhalt ' + (viaStations().length > 1 ? (idx + 1) : '') + ' (Bahnhof oder Ort)'"
-                            iconName=""
-                            [inputId]="'input-via-' + via.id"
-                            [initialStation]="via.station"
-                            [allowCurrentLocation]="false"
-                            [isCursorActive]="activeInput() === via.id"
-                            matchContainerSelector="#planner-card"
-                            (stationChange)="onViaStationChange(via.id, $event)"
-                            (queryChange)="onViaQueryChange(via.id, $event)"
-                            (inputFocus)="activeInput.set(via.id)"
-                          ></app-station-input>
-                        </div>
+                      @if (!fromStation()?.isCurrentLocation) {
                         <button
                           type="button"
-                          (click)="removeViaStation(via.id)"
-                          class="w-7 h-7 rounded-full flex items-center justify-center text-[#8D6E63] hover:text-[#B91C1C] hover:bg-[#FEE2E2] transition-colors cursor-pointer mr-1 shrink-0"
-                          title="Zwischenhalt entfernen"
-                          aria-label="Zwischenhalt entfernen"
+                          (click)="applyStandortToOrigin()"
+                          class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold text-[#2D6A4F] bg-white hover:bg-[#EDF9F0] border border-[#D7CCC8] hover:border-[#2D6A4F] transition-all cursor-pointer shadow-2xs"
+                          title="Aktuellen Standort als Startbahnhof übernehmen"
                         >
-                          <span class="mat-icon text-base">close</span>
+                          <span class="mat-icon text-sm">my_location</span>
+                          <span class="hidden xs:inline">Mein Standort</span>
                         </button>
-                      </div>
-                      <div class="h-px bg-[#EFEBE6] w-full my-0.5"></div>
-                    }
-
-                    <!-- Destination Station (Flush) -->
-                    <div>
-                      <app-station-input
-                        [variant]="'flush'"
-                        [showLabel]="false"
-                        label=""
-                        placeholder="Nach (Zielbahnhof oder Ort)"
-                        iconName=""
-                        inputId="input-to-station"
-                        [initialStation]="toStation()"
-                        [allowCurrentLocation]="false"
-                        [isCursorActive]="activeInput() === 'to'"
-                        matchContainerSelector="#planner-card"
-                        (stationChange)="onToStationChange($event)"
-                        (queryChange)="toStationQuery.set($event)"
-                        (inputFocus)="activeInput.set('to')"
-                      ></app-station-input>
+                      }
                     </div>
                   </div>
 
-                  <!-- Right Column Controls: Swap button and subtle Add Via Station button directly below it -->
-                  <div class="absolute right-1.5 sm:right-2 top-1/2 -translate-y-1/2 flex flex-col items-center gap-1 z-20">
-                    <!-- Swap Stations button -->
+                  <!-- Start Station Input with Hero sizing -->
+                  <app-station-input
+                    [variant]="'hero'"
+                    [showLabel]="false"
+                    label="Startbahnhof"
+                    placeholder="Von (Startbahnhof oder Haltestelle eingeben...)"
+                    iconName="directions_railway"
+                    inputId="input-from-station"
+                    [initialStation]="fromStation()"
+                    [allowCurrentLocation]="true"
+                    [isCursorActive]="activeInput() === 'from'"
+                    matchContainerSelector="#planner-card"
+                    (stationChange)="onFromStationChange($event)"
+                    (queryChange)="fromStationQuery.set($event)"
+                    (inputFocus)="activeInput.set('from')"
+                  ></app-station-input>
+                </div>
+
+                <!-- CONNECTOR & SWAP ACTION ROW -->
+                <div class="relative flex items-center justify-between px-2 sm:px-4 py-0.5 z-20">
+                  <div class="flex items-center gap-2 text-xs font-semibold text-[#8D6E63]">
+                    <span class="w-0.5 h-6 bg-[#D7CCC8] ml-3.5 hidden sm:block" aria-hidden="true"></span>
+                  </div>
+
+                  <div class="flex items-center gap-2.5 mx-auto">
+                    <!-- Prominent Swap Stations Button -->
                     <button
                       type="button"
                       id="btn-swap-stations"
                       (click)="swapStations()"
-                      class="group w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white hover:bg-[#EDF9F0] text-[#2D6A4F] hover:text-[#1B4332] flex items-center justify-center cursor-pointer transition-all duration-200 shadow-2xs hover:shadow-xs border border-[#E0D7D0] hover:border-[#2D6A4F] active:scale-95 focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]/40"
-                      title="Start und Ziel tauschen"
+                      class="group inline-flex items-center gap-2.5 px-5 py-2.5 rounded-full bg-white hover:bg-[#EDF9F0] text-[#2D6A4F] hover:text-[#1B4332] border-2 border-[#D7CCC8] hover:border-[#2D6A4F] shadow-xs hover:shadow-md transition-all duration-200 active:scale-95 cursor-pointer font-extrabold text-xs sm:text-sm"
+                      title="Start- und Zielbahnhof tauschen"
                       aria-label="Start- und Zielbahnhof tauschen"
                     >
-                      <span class="mat-icon text-base text-[#2D6A4F] group-hover:text-[#1B4332] transition-transform duration-300 group-hover:rotate-180 group-active:rotate-180 select-none" aria-hidden="true">swap_vert</span>
+                      <span class="mat-icon text-xl text-[#2D6A4F] group-hover:rotate-180 transition-transform duration-300 select-none" aria-hidden="true">swap_vert</span>
+                      <span class="tracking-wide">Start & Ziel tauschen</span>
                     </button>
 
-                    <!-- Add Via Station: subtle icon button directly below swap, no label, no margin -->
-                    <button
-                      type="button"
-                      id="btn-add-via-station"
-                      (click)="addViaStation()"
-                      class="w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center text-[#8D6E63] hover:text-[#2D6A4F] hover:bg-[#EDF9F0] transition-colors cursor-pointer border border-transparent hover:border-[#D7CCC8] active:scale-95 focus:outline-none focus:ring-1 focus:ring-[#2D6A4F]/30"
-                    >
-                      <span class="mat-icon text-base leading-none" aria-hidden="true">add_circle_outline</span>
-                    </button>
+                    <!-- Add Via Station Button -->
+                    @if (viaStations().length === 0) {
+                      <button
+                        type="button"
+                        id="btn-add-via-station"
+                        (click)="addViaStation()"
+                        class="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-white hover:bg-[#FAF7F2] text-[#795548] hover:text-[#2D6A4F] border border-[#E0D7D0] hover:border-[#2D6A4F] transition-colors cursor-pointer text-xs font-bold shadow-2xs"
+                        title="Zwischenhalt hinzufügen"
+                        aria-label="Zwischenhalt hinzufügen"
+                      >
+                        <span class="mat-icon text-sm leading-none" aria-hidden="true">add_circle_outline</span>
+                        <span>+ Zwischenhalt</span>
+                      </button>
+                    }
                   </div>
+
+                  <div class="w-8 hidden sm:block"></div>
                 </div>
+
+                <!-- INTERMEDIATE STATIONS (VIA) IF ANY -->
+                @for (via of viaStations(); track via.id; let idx = $index) {
+                  <div class="relative rounded-2xl border-2 border-[#D97706]/40 p-4 sm:p-5 bg-white shadow-2xs">
+                    <div class="flex items-center justify-between gap-2 mb-2">
+                      <div class="flex items-center gap-2 min-w-0">
+                        <span class="w-3.5 h-3.5 rounded-full border-2 border-[#D97706] bg-white ring-2 ring-[#D97706]/30 shrink-0"></span>
+                        <span class="text-xs font-black uppercase tracking-wider text-[#D97706] truncate">
+                          Zwischenhalt {{ viaStations().length > 1 ? (idx + 1) : '' }}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        (click)="removeViaStation(via.id)"
+                        class="w-8 h-8 rounded-full flex items-center justify-center text-[#8D6E63] hover:text-[#B91C1C] hover:bg-[#FEE2E2] transition-colors cursor-pointer shrink-0"
+                        title="Zwischenhalt entfernen"
+                        aria-label="Zwischenhalt entfernen"
+                      >
+                        <span class="mat-icon text-lg">close</span>
+                      </button>
+                    </div>
+
+                    <app-station-input
+                      [variant]="'hero'"
+                      [showLabel]="false"
+                      label="Zwischenhalt"
+                      [placeholder]="'Zwischenhalt ' + (viaStations().length > 1 ? (idx + 1) : '') + ' (Bahnhof oder Ort eingeben...)'"
+                      iconName="add_location"
+                      [inputId]="'input-via-' + via.id"
+                      [initialStation]="via.station"
+                      [allowCurrentLocation]="false"
+                      [isCursorActive]="activeInput() === via.id"
+                      matchContainerSelector="#planner-card"
+                      (stationChange)="onViaStationChange(via.id, $event)"
+                      (queryChange)="onViaQueryChange(via.id, $event)"
+                      (inputFocus)="activeInput.set(via.id)"
+                    ></app-station-input>
+                  </div>
+                }
+
+                <!-- 2. ZIELBAHNHOF (NACH) - PROMINENT HERO CARD -->
+                <div 
+                  class="relative rounded-2xl border-2 transition-all duration-200 p-4 sm:p-5 bg-[#FCFAF8] shadow-xs hover:shadow-sm"
+                  [class.border-[#1F1612]]="activeInput() === 'to'"
+                  [class.ring-4]="activeInput() === 'to'"
+                  [class.ring-[#1F1612]/20]="activeInput() === 'to'"
+                  [class.bg-white]="activeInput() === 'to'"
+                  [class.border-[#D1C7BD]]="activeInput() !== 'to'"
+                  [class.hover:border-[#1F1612]/60]="activeInput() !== 'to'"
+                >
+                  <div class="flex items-center justify-between gap-2 mb-2">
+                    <div class="flex items-center gap-2.5 min-w-0">
+                      <span class="w-4 h-4 rounded-xs bg-[#1F1612] ring-2 ring-[#1F1612]/30 shrink-0 flex items-center justify-center">
+                        <span class="w-1.5 h-1.5 rounded-xs bg-white"></span>
+                      </span>
+                      <span class="text-xs sm:text-sm font-black uppercase tracking-wider text-[#1F1612] truncate">
+                        Zielbahnhof (Nach)
+                      </span>
+                    </div>
+
+                    @if (toStation()) {
+                      <span class="px-2.5 py-1 rounded-full bg-[#F5EBE6] text-[#3E2723] text-xs font-black border border-[#D7CCC8] shrink-0 flex items-center gap-1.5">
+                        <span class="mat-icon text-sm text-[#3E2723]">place</span>
+                        <span>Ziel gewählt ✓</span>
+                      </span>
+                    } @else {
+                      <span class="text-[11px] font-semibold text-[#8D6E63] hidden xs:inline">
+                        Wohin möchtest du reisen?
+                      </span>
+                    }
+                  </div>
+
+                  <!-- Destination Station Input with Hero sizing -->
+                  <app-station-input
+                    [variant]="'hero'"
+                    [showLabel]="false"
+                    label="Zielbahnhof"
+                    placeholder="Nach (Zielbahnhof oder Ort eingeben...)"
+                    iconName="place"
+                    inputId="input-to-station"
+                    [initialStation]="toStation()"
+                    [allowCurrentLocation]="false"
+                    [isCursorActive]="activeInput() === 'to'"
+                    matchContainerSelector="#planner-card"
+                    (stationChange)="onToStationChange($event)"
+                    (queryChange)="toStationQuery.set($event)"
+                    (inputFocus)="activeInput.set('to')"
+                  ></app-station-input>
+                </div>
+
               </div>
 
               <!-- Dein Standort (Seamless section inside the white card) -->
               <div
-                class="border-t border-[#EFEBE6] bg-[#FAF7F2]/60 hover:bg-[#EDF9F0] px-3 sm:px-4 py-2 flex items-center justify-between gap-2.5 transition-colors"
+                class="border-t border-[#EFEBE6] bg-[#FAF7F2]/60 hover:bg-[#EDF9F0] px-4 sm:px-5 py-2.5 flex items-center justify-between gap-3 transition-colors"
                 [class.bg-[#EDF9F0]]="standortActionState() === 'success'"
                 [class.bg-[#FFFBEB]]="standortActionState() === 'gps-warning'"
               >
@@ -532,27 +597,6 @@ interface CuratedDestination {
               </div>
             }
 
-            <!-- Wide Search Button when collapsed (matching the aesthetic of Verbindung suchen) -->
-            @if (!showSearchOptions()) {
-              <div class="pt-0.5">
-                <button
-                  type="submit"
-                  id="btn-search-compact"
-                  [disabled]="isLoading() || !toStation()"
-                  class="w-full py-2.5 sm:py-3 bg-[#1B4332] hover:bg-[#132A1E] disabled:bg-[#EFEBE6] disabled:text-[#A1887F] disabled:cursor-not-allowed text-white font-black text-xs tracking-wider rounded-lg shadow-xs hover:shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer"
-                  aria-label="Verbindungen suchen"
-                >
-                  @if (isLoading()) {
-                    <span class="mat-icon animate-spin text-sm" aria-hidden="true">sync</span>
-                    <span>LADEN...</span>
-                  } @else {
-                    <span class="mat-icon text-sm" aria-hidden="true">search</span>
-                    <span>VERBINDUNGEN SUCHEN</span>
-                  }
-                </button>
-              </div>
-            }
-
             <!-- COLLAPSIBLE OPTIONS: Expandable Deutschlandticket & Transport Modes -->
             @if (showSearchOptions()) {
               <div class="space-y-3.5 pt-2 border-t border-[#EDE5DC] animate-in fade-in duration-150">
@@ -762,7 +806,7 @@ interface CuratedDestination {
 
                 <!-- Filters & Search Button -->
                 <div class="pt-2.5 border-t border-[#EDE5DC] flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                  <div class="flex items-center gap-3.5 flex-wrap">
+                  <div class="flex items-center gap-3 flex-wrap">
                     <label class="flex items-center gap-1.5 cursor-pointer select-none">
                       <input
                         id="chk-fernverkehr"
@@ -775,28 +819,53 @@ interface CuratedDestination {
                         ICE/IC
                       </span>
                     </label>
-                  </div>
 
-                  <!-- Search Button -->
-                  <button
-                    type="submit"
-                    id="btn-search-connections"
-                    [disabled]="isLoading() || !toStation()"
-                    class="px-5 py-2 bg-[#1B4332] hover:bg-[#132A1E] disabled:bg-[#EFEBE6] disabled:text-[#A1887F] disabled:cursor-not-allowed text-white font-black text-xs tracking-wider rounded-lg shadow-xs hover:shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-                    aria-label="Verbindungen suchen"
-                  >
-                    @if (isLoading()) {
-                      <span class="mat-icon animate-spin text-sm" aria-hidden="true">sync</span>
-                      <span>LADEN...</span>
-                    } @else {
-                      <span class="mat-icon text-sm" aria-hidden="true">search</span>
-                      <span>VERBINDUNGEN SUCHEN</span>
-                    }
-                  </button>
+                    <div class="flex items-center gap-1.5 bg-[#FAF7F2] px-2 py-0.5 rounded-lg border border-[#E6DED6]">
+                      <span class="mat-icon text-xs text-[#795548]" aria-hidden="true">sync_alt</span>
+                      <label for="select-transfer-time" class="text-[11px] text-[#795548] font-bold">Umstieg:</label>
+                      <select
+                        id="select-transfer-time"
+                        formControlName="minTransferTime"
+                        class="text-[11px] font-bold text-[#1F1612] bg-transparent border-none outline-none cursor-pointer pr-1"
+                        aria-label="Mindestumstiegszeit auswählen"
+                      >
+                        <option value="auto">Standard</option>
+                        <option value="comfortable">Bequem (≥10 Min.)</option>
+                        <option value="accessible">Barrierefrei / Gepäck (≥14 Min.)</option>
+                      </select>
+                    </div>
+                  </div>
                 </div>
 
-          </div>
-        }
+              </div>
+            }
+
+            <!-- PROMINENT HERO SEARCH BUTTON: Unmissable primary call-to-action commanding the screen -->
+            <div class="p-4 sm:p-5 lg:p-6 bg-gradient-to-b from-[#FAF7F2]/60 to-[#F5EFE6] border-t border-[#EDE5DC] mt-2">
+              <button
+                type="submit"
+                id="btn-search-connections"
+                [disabled]="isLoading() || !toStation()"
+                class="w-full py-4.5 sm:py-5 md:py-5.5 px-8 bg-[#1B4332] hover:bg-[#143326] active:bg-[#0c2017] disabled:bg-[#EFEBE6] disabled:text-[#A1887F] disabled:cursor-not-allowed disabled:shadow-none text-white font-black text-base sm:text-lg md:text-xl tracking-wider uppercase rounded-2xl shadow-lg hover:shadow-2xl hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99] transition-all duration-200 flex items-center justify-center gap-3.5 cursor-pointer group focus:outline-none focus:ring-4 focus:ring-[#2D6A4F]/40"
+                aria-label="Verbindungen suchen"
+              >
+                @if (isLoading()) {
+                  <span class="mat-icon animate-spin text-2xl sm:text-3xl" aria-hidden="true">sync</span>
+                  <span>VERBINDUNGEN WERDEN GESUCHT...</span>
+                } @else {
+                  <span class="mat-icon text-2xl sm:text-3xl group-hover:scale-110 transition-transform" aria-hidden="true">search</span>
+                  <span>VERBINDUNGEN SUCHEN</span>
+                  <span class="mat-icon text-xl sm:text-2xl text-[#81C784] group-hover:translate-x-2 transition-transform" aria-hidden="true">arrow_forward</span>
+                }
+              </button>
+
+              @if (!toStation() && !isLoading()) {
+                <p class="text-center text-xs font-semibold text-[#8D6E63] mt-2.5 flex items-center justify-center gap-1.5">
+                  <span class="mat-icon text-sm text-[#D97706]">info</span>
+                  <span>Bitte wähle oben deinen Zielbahnhof aus, um Verbindungen anzuzeigen</span>
+                </p>
+              }
+            </div>
 
             <!-- Pre-Search Information: In der Nähe: (4 Stationen in 4 Zeilen) & Vorschläge: (4 Stationen in 4 Zeilen) -->
             <!-- Visible directly below Verbindungen suchen until the user clicks search -->
@@ -1081,6 +1150,7 @@ interface CuratedDestination {
                       </div>
 
                       <div class="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+                        <app-co2-balance-badge [journey]="activeJ" variant="badge"></app-co2-balance-badge>
                         <button
                           type="button"
                           id="btn-open-detail-from-map-header"
@@ -1194,6 +1264,8 @@ interface CuratedDestination {
                                     <span>Teilweise</span>
                                   </span>
                                 }
+
+                                <app-co2-balance-badge [journey]="journey" variant="compact"></app-co2-balance-badge>
                               </div>
 
                               <span class="text-xs font-black text-[#1F1612]">
@@ -1494,6 +1566,9 @@ interface CuratedDestination {
                                 <span>Nicht voll im D-Ticket</span>
                               </span>
                             }
+
+                            <!-- CO2-Bilanz Anzeige & Rechner -->
+                            <app-co2-balance-badge [journey]="journey" variant="badge"></app-co2-balance-badge>
                           </div>
 
                           <!-- 2. Header: Salida ➔ Llegada (live) & Duración -->
@@ -1693,7 +1768,7 @@ interface CuratedDestination {
       </div>
 
       <!-- RIGHT COLUMN: 'Entdecke Deutschland' Highlights Module (Side Showcase) -->
-      <div class="lg:col-span-5 bg-white rounded-2xl p-5 sm:p-6 border border-[#E6DED6] shadow-xs space-y-4" role="complementary" aria-label="Ausflugs-Highlights">
+      <div class="lg:col-span-4 bg-white rounded-2xl p-5 sm:p-6 border border-[#E6DED6] shadow-xs space-y-4" role="complementary" aria-label="Ausflugs-Highlights">
         
         <!-- Header with View All Link -->
         <div class="flex items-center justify-between pb-3 border-b border-[#EDE5DC]">
@@ -2457,7 +2532,8 @@ export class PlannerView implements OnInit, AfterViewInit {
     includeSuburban: [true],
     includeSubway: [true],
     includeBus: [true],
-    includeFernverkehr: [false]
+    includeFernverkehr: [false],
+    minTransferTime: ['auto']
   });
 
   readonly isTransitModesExpanded = signal<boolean>(true);
@@ -2476,7 +2552,17 @@ export class PlannerView implements OnInit, AfterViewInit {
   }
 
   readonly sortedJourneys = computed(() => {
-    const list = [...this.journeys()];
+    let list = [...this.journeys()];
+    const transferPref = this.searchForm.get('minTransferTime')?.value || 'auto';
+
+    if (transferPref === 'comfortable') {
+      const filtered = list.filter(j => j.transfers === 0 || (j.transferDetails && j.transferDetails.every(td => td.bufferMinutes >= 10)));
+      if (filtered.length > 0) list = filtered;
+    } else if (transferPref === 'accessible') {
+      const filtered = list.filter(j => j.transfers === 0 || (j.transferDetails && j.transferDetails.every(td => td.bufferMinutes >= 14)));
+      if (filtered.length > 0) list = filtered;
+    }
+
     const criteria = this.sortBy();
 
     if (criteria === 'fastest') {
@@ -3248,6 +3334,7 @@ export class PlannerView implements OnInit, AfterViewInit {
       departureTime: depDateTime,
       dTicketOnly: formVal.dTicketOnly ?? true,
       includeFernverkehr: formVal.includeFernverkehr ?? false,
+      minTransferTime: formVal.minTransferTime ?? 'auto',
       products: {
         regional: formVal.includeRegional ?? true,
         suburban: formVal.includeSuburban ?? true,
@@ -3888,35 +3975,47 @@ export class PlannerView implements OnInit, AfterViewInit {
         icon: 'bolt'
       };
     }
-    const minBuffer = journey.transferDetails?.length
-      ? Math.min(...journey.transferDetails.map(t => t.bufferMinutes))
+
+    const details = journey.transferDetails || [];
+    const minBuffer = details.length
+      ? Math.min(...details.map(t => t.bufferMinutes))
       : 12;
+
+    const tightTransfer = details.find(
+      t => t.transferQuality === 'tight' || (typeof t.minTransferMinutes === 'number' && t.bufferMinutes < t.minTransferMinutes) || t.bufferMinutes <= 5
+    );
+
+    if (tightTransfer) {
+      const minReq = tightTransfer.minTransferMinutes || 6;
+      return {
+        type: 'tight',
+        label: `Knapper Umstieg in ${tightTransfer.stationName} (${tightTransfer.bufferMinutes} Min. Puffer, mind. ${minReq} Min. empfohlen)`,
+        shortLabel: `${tightTransfer.bufferMinutes} Min. in ${tightTransfer.stationName} (Knapp)`,
+        badgeClass: 'bg-[#FFF3E0] text-[#E65100] border-[#FFE0B2]',
+        icon: 'warning'
+      };
+    }
+
+    const firstDetail = details[0];
+    const hubLabel = firstDetail?.categoryLabel ? ` (${firstDetail.categoryLabel})` : '';
 
     if (minBuffer >= 8) {
       return {
         type: 'comfortable',
-        label: `Entspannter Umstieg (${minBuffer} Min. Puffer)`,
+        label: `Entspannter Umstieg (${minBuffer} Min. Puffer)${hubLabel}`,
         shortLabel: `${minBuffer} Min. Umstieg`,
         badgeClass: 'bg-[#EDF9F0] text-[#1B4332] border-[#B7E4C7]',
         icon: 'check_circle'
       };
-    } else if (minBuffer <= 5) {
-      return {
-        type: 'tight',
-        label: `Knapper Umstieg (${minBuffer} Min. Puffer)`,
-        shortLabel: `${minBuffer} Min. Umstieg`,
-        badgeClass: 'bg-[#FFF3E0] text-[#E65100] border-[#FFE0B2]',
-        icon: 'warning'
-      };
-    } else {
-      return {
-        type: 'normal',
-        label: `${journey.transfers}x Umsteigen (${minBuffer} Min. Puffer)`,
-        shortLabel: `${journey.transfers}x Umstieg`,
-        badgeClass: 'bg-[#FAF7F2] text-[#4E342E] border-[#E6DED6]',
-        icon: 'sync_alt'
-      };
     }
+
+    return {
+      type: 'normal',
+      label: `${journey.transfers}x Umsteigen (${minBuffer} Min. Puffer)${hubLabel}`,
+      shortLabel: `${journey.transfers}x Umstieg`,
+      badgeClass: 'bg-[#FAF7F2] text-[#4E342E] border-[#E6DED6]',
+      icon: 'sync_alt'
+    };
   }
 
   calculateCo2(durationMinutes: number): string {

@@ -84,6 +84,15 @@ export interface TransitLeg {
   remarks?: TransitRemark[];
 }
 
+export interface StationTransferCriteria {
+  category: 'major_hub' | 'medium_hub' | 'regional_stop' | 'metro';
+  categoryLabel: string;
+  minTransferMinutes: number;
+  recommendedBufferMinutes: number;
+  tightThresholdMinutes: number;
+  description: string;
+}
+
 export interface ConnectionJourney {
   id: string;
   origin: Station;
@@ -113,6 +122,11 @@ export interface ConnectionJourney {
   transferDetails: {
     stationName: string;
     bufferMinutes: number;
+    category?: 'major_hub' | 'medium_hub' | 'regional_stop' | 'metro';
+    categoryLabel?: string;
+    minTransferMinutes?: number;
+    transferQuality?: 'optimal' | 'tight' | 'excessive';
+    note?: string;
   }[];
   viaStationName?: string;
   accessibility?: RouteAccessibilitySummary;
@@ -202,6 +216,7 @@ export interface SearchQuery {
   time: string;
   dTicketOnly: boolean;
   includeFernverkehr: boolean;
+  minTransferTime?: number;
   sortBy: 'fastest' | 'fewest-transfers' | 'departure' | 'arrival';
 }
 

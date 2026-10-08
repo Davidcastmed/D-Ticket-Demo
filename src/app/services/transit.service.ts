@@ -2,10 +2,12 @@ import { Injectable, signal } from '@angular/core';
 import {
   Station,
   ConnectionJourney,
+  TransitLeg,
   DepartureItem,
   RegionalGetaway,
   StationAccessibility,
-  JourneyLiveStatusResponse
+  JourneyLiveStatusResponse,
+  StationTransferCriteria
 } from '../models/transit.models';
 import { ALL_GERMAN_STATIONS, calculateDistanceKm } from '../data/stations-data';
 import {
@@ -18,6 +20,7 @@ import {
   REGIONAL_DESTINATIONS_FROM_HAMBURG,
   BUNDESLAENDER_METADATA
 } from '../../server/german-regions-data';
+import { cleanStationName } from '../utils/station-utils';
 
 export interface FavoriteRoute {
   id: string;
@@ -52,8 +55,8 @@ export interface GeolocationDetailedResult {
 })
 export class TransitService {
   // Navigation tabs:
-  // 'planner' ("Wohin möchtest du?"), 'live-board' ("Was fährt hier?"), 'hamburg-hub' ("Von Hamburg aus"), 'surprise' ("Überrasche mich"), 'favorites' ("Meine Favoriten"), 'accessibility' ("Barrierefreiheit")
-  readonly activeTab = signal<'planner' | 'live-board' | 'hamburg-hub' | 'surprise' | 'favorites' | 'accessibility'>('planner');
+  // 'planner' ("Wohin möchtest du?"), 'live-board' ("Was fährt hier?"), 'hamburg-hub' ("Von Hamburg aus"), 'surprise' ("Überrasche mich"), 'favorites' ("Meine Favoriten"), 'accessibility' ("Barrierefreiheit"), 'about' ("Über uns & Mission")
+  readonly activeTab = signal<'planner' | 'live-board' | 'hamburg-hub' | 'surprise' | 'favorites' | 'accessibility' | 'about'>('planner');
 
   // Active journey for detailed timeline and map inspection
   readonly selectedJourney = signal<ConnectionJourney | null>(null);
@@ -472,19 +475,325 @@ export class TransitService {
     return nearest;
   }
 
+  /**
+   * Identifies whether a transit leg represents a long-distance connection (ICE, IC, EC, RJ, TGV, Flixtrain, Nightjet, etc.)
+   */
+  isLongDistanceLeg(leg: TransitLeg): boolean {
+    if (!leg || leg.walking) return false;
+    const prod = (leg.line?.product || '').toLowerCase();
+    const prodName = (leg.line?.productName || '').toLowerCase();
+    const lineName = (leg.line?.name || '').trim().toUpperCase();
+
+    // Standard long-distance products
+    if (prod === 'nationalexpress' || prod === 'national') return true;
+
+    // Long-distance product labels
+    if (
+      prodName.includes('ice') ||
+      prodName.includes('intercity') ||
+      prodName.includes('eurocity') ||
+      prodName.includes('flixtrain') ||
+      prodName.includes('fernverkehr') ||
+      prodName.includes('thalys') ||
+      prodName.includes('nightjet')
+    ) {
+      return true;
+    }
+
+    // Line name prefixes for German/European Fernverkehr
+    if (/^(ICE|IC|EC|RJ|FLX|TGV|ECE|NJ)\b/i.test(lineName)) {
+      return true;
+    }
+
+    // Explicit non-D-Ticket validity on rail line
+    if (leg.isDeutschlandticketValid === false) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Determines if a journey contains any long-distance ICE/IC legs that would interfere with regional trip calculations
+   */
+  hasLongDistanceLegs(journey: ConnectionJourney): boolean {
+    if (journey.isLongDistance) return true;
+    if (journey.legs && journey.legs.length > 0) {
+      return journey.legs.some(leg => this.isLongDistanceLeg(leg));
+    }
+    return false;
+  }
+
+  /**
+   * Ermittelt Kriterien und Mindestumstiegszeiten basierend auf der Stationsgröße
+   * in der Metropolregion Hamburg und Norddeutschland.
+   *
+   * Stationen werden nach ihrer baulichen Dimension und Komplexität kategorisiert:
+   * 1. Großbahnhöfe / Metropol-Knoten (Hamburg Hbf, Hamburg-Altona): Min. 8 Min.
+   *    (Aufgrund von 14 Gleisen, S-Bahn-Tiefbahnhof Gleise 1-4, U-Bahn-Stationen und hohem Passagieraufkommen)
+   * 2. Regionale Hauptknoten (Dammtor, Harburg, Lübeck Hbf, Kiel Hbf, Neumünster): Min. 6 Min.
+   *    (Querbahnsteig/Unterführung mit mehreren Bahnsteigen zwischen Regionalverkehr und S-Bahn)
+   * 3. Regionale Netzknoten (Pinneberg, Elmshorn, Bergedorf, Ahrensburg, Bad Oldesloe, Stade, Buxtehude): Min. 5 Min.
+   *    (Umstieg zwischen Regionalbahn z.B. RB 61/71 und S-Bahn S5 per Personenunterführung)
+   * 4. Innerstädtische Schnellbahnstationen (Sternschanze, Holstenstraße, Jungfernstieg, Berliner Tor, Landungsbrücken): Min. 3-4 Min.
+   * 5. Lokale Haltepunkte: Min. 4 Min.
+   */
+  getStationTransferCriteria(stationName: string): StationTransferCriteria {
+    const norm = cleanStationName(stationName || '').toLowerCase().trim();
+
+    // 1. Kategorie Großbahnhöfe / Metropol-Großkreuz (Hamburg Hbf, Hamburg-Altona)
+    if (
+      norm.includes('hamburg hbf') ||
+      norm.includes('hauptbahnhof hamburg') ||
+      norm.includes('altona') ||
+      norm === 'hbf' ||
+      norm.includes('hannover hbf') ||
+      norm.includes('bremen hbf') ||
+      norm.includes('berlin hbf')
+    ) {
+      return {
+        category: 'major_hub',
+        categoryLabel: 'Großbahnhof (Großes Drehkreuz)',
+        minTransferMinutes: 8,
+        recommendedBufferMinutes: 14,
+        tightThresholdMinutes: 6,
+        description: 'Großer Metropolbahnhof mit 14 Bahnsteiggleisen, S-Bahn-Tiefbahnhof und U-Bahn-Ebenen. Mindestumstiegszeit 8 Min. erforderlich.'
+      };
+    }
+
+    // 2. Regionale Hauptknoten (Dammtor, Harburg, Lübeck Hbf, Kiel Hbf, Neumünster, Schwerin, Rostock)
+    if (
+      norm.includes('dammtor') ||
+      norm.includes('harburg') ||
+      norm.includes('kiel') ||
+      norm.includes('lübeck') ||
+      norm.includes('luebeck') ||
+      norm.includes('neumünster') ||
+      norm.includes('neumuenster') ||
+      norm.includes('schwerin') ||
+      norm.includes('rostock')
+    ) {
+      return {
+        category: 'medium_hub',
+        categoryLabel: 'Regionaler Hauptknoten',
+        minTransferMinutes: 6,
+        recommendedBufferMinutes: 10,
+        tightThresholdMinutes: 4,
+        description: 'Regionaler Großknoten mit Bahnsteigwechsel per Unterführung/Querbahnsteig. Mindestumstiegszeit 6 Min. empfohlen.'
+      };
+    }
+
+    // 3. Regionale Netzknoten & Umsteigepunkte zur S-Bahn (Pinneberg, Elmshorn, Bergedorf, Ahrensburg, Bad Oldesloe, Buxtehude, Stade, Buchholz)
+    if (
+      norm.includes('pinneberg') ||
+      norm.includes('elmshorn') ||
+      norm.includes('bergedorf') ||
+      norm.includes('ahrensburg') ||
+      norm.includes('bad oldesloe') ||
+      norm.includes('buxtehude') ||
+      norm.includes('stade') ||
+      norm.includes('buchholz') ||
+      norm.includes('winsen') ||
+      norm.includes('lüneburg') ||
+      norm.includes('lueneburg') ||
+      norm.includes('itzehoe') ||
+      norm.includes('wrist') ||
+      norm.includes('büchen') ||
+      norm.includes('buechen')
+    ) {
+      return {
+        category: 'regional_stop',
+        categoryLabel: 'Regionaler Netzknoten',
+        minTransferMinutes: 5,
+        recommendedBufferMinutes: 8,
+        tightThresholdMinutes: 4,
+        description: 'Wichtiger Umsteigebahnhof der Metropolregion (z.B. Wechsel zwischen Regionalbahn und S-Bahn per Unterführung). Mindestumstiegszeit 5 Min.'
+      };
+    }
+
+    // 4. Innerstädtische Schnellbahn- & U-Bahn-Haltestellen der Metropolregion Hamburg
+    if (
+      norm.includes('sternschanze') ||
+      norm.includes('holstenstraße') ||
+      norm.includes('holstenstrasse') ||
+      norm.includes('jungfernstieg') ||
+      norm.includes('landungsbrücken') ||
+      norm.includes('landungsbruecken') ||
+      norm.includes('berliner tor') ||
+      norm.includes('barmbek') ||
+      norm.includes('ohlsdorf') ||
+      norm.includes('wandsbeker chaussee') ||
+      norm.startsWith('u ') ||
+      norm.startsWith('s ')
+    ) {
+      return {
+        category: 'metro',
+        categoryLabel: 'S-Bahn / U-Bahn Haltestelle',
+        minTransferMinutes: 3,
+        recommendedBufferMinutes: 6,
+        tightThresholdMinutes: 3,
+        description: 'Innerstädtischer Nahverkehrsumstieg mit Treppen-/Fahrstuhlebenen. Mindestumstiegszeit 3–4 Min.'
+      };
+    }
+
+    // 5. Lokaler Halt / sonstige Bahnhöfe
+    return {
+      category: 'regional_stop',
+      categoryLabel: 'Regionaler Unterwegshalt',
+      minTransferMinutes: 4,
+      recommendedBufferMinutes: 7,
+      tightThresholdMinutes: 3,
+      description: 'Überschaubarer Bahnhof/Haltepunkt mit Unterführung oder Gleisüberquerung. Mindestumstiegszeit 4 Min.'
+    };
+  }
+
+  /**
+   * Validiert und passt die Umstiegszeiten einer einzelnen Verbindung basierend auf der Stationsgröße
+   * in der Metropolregion Hamburg an, um unrealistisch kurze Umstiege zu vermeiden.
+   */
+  validateJourneyTransferTimes(journey: ConnectionJourney): ConnectionJourney {
+    if (!journey || !journey.legs || journey.legs.length <= 1) {
+      return journey;
+    }
+
+    // Deep clone legs to allow time adjustments without side effects
+    const updatedLegs: TransitLeg[] = journey.legs.map(leg => ({
+      ...leg,
+      origin: { ...leg.origin },
+      destination: { ...leg.destination },
+      line: leg.line ? { ...leg.line } : undefined,
+      stopovers: leg.stopovers ? leg.stopovers.map(s => ({ ...s, stop: { ...s.stop } })) : undefined
+    }));
+
+    const updatedTransferDetails: ConnectionJourney['transferDetails'] = [];
+
+    for (let i = 0; i < updatedLegs.length - 1; i++) {
+      const curLeg = updatedLegs[i];
+      const nextLeg = updatedLegs[i + 1];
+
+      const transferStationName = curLeg.destination?.name || nextLeg.origin?.name || `Zwischenhalt ${i + 1}`;
+      const criteria = this.getStationTransferCriteria(transferStationName);
+      const minRequiredBuffer = criteria.minTransferMinutes;
+
+      const curArrTime = new Date(curLeg.arrival).getTime();
+      const nextDepTime = new Date(nextLeg.departure).getTime();
+      const actualBufferMinutes = Math.round((nextDepTime - curArrTime) / 60000);
+
+      let effectiveBuffer = actualBufferMinutes;
+
+      if (actualBufferMinutes < minRequiredBuffer) {
+        const neededShiftMinutes = minRequiredBuffer - actualBufferMinutes;
+
+        // Shift nextLeg and all subsequent legs forward so the transfer is realistically feasible
+        for (let k = i + 1; k < updatedLegs.length; k++) {
+          const l = updatedLegs[k];
+          const depMs = new Date(l.departure).getTime() + neededShiftMinutes * 60000;
+          const planDepMs = new Date(l.plannedDeparture).getTime() + neededShiftMinutes * 60000;
+          const arrMs = new Date(l.arrival).getTime() + neededShiftMinutes * 60000;
+          const planArrMs = new Date(l.plannedArrival).getTime() + neededShiftMinutes * 60000;
+
+          l.departure = new Date(depMs).toISOString();
+          l.plannedDeparture = new Date(planDepMs).toISOString();
+          l.arrival = new Date(arrMs).toISOString();
+          l.plannedArrival = new Date(planArrMs).toISOString();
+
+          // Also shift stopovers if present
+          if (l.stopovers && l.stopovers.length > 0) {
+            l.stopovers = l.stopovers.map(st => ({
+              ...st,
+              departure: st.departure ? new Date(new Date(st.departure).getTime() + neededShiftMinutes * 60000).toISOString() : st.departure,
+              plannedDeparture: st.plannedDeparture ? new Date(new Date(st.plannedDeparture).getTime() + neededShiftMinutes * 60000).toISOString() : st.plannedDeparture,
+              arrival: st.arrival ? new Date(new Date(st.arrival).getTime() + neededShiftMinutes * 60000).toISOString() : st.arrival,
+              plannedArrival: st.plannedArrival ? new Date(new Date(st.plannedArrival).getTime() + neededShiftMinutes * 60000).toISOString() : st.plannedArrival
+            }));
+          }
+        }
+
+        effectiveBuffer = minRequiredBuffer;
+      }
+
+      const quality: 'optimal' | 'tight' | 'excessive' =
+        effectiveBuffer < minRequiredBuffer
+          ? 'tight'
+          : effectiveBuffer > 25
+            ? 'excessive'
+            : effectiveBuffer >= criteria.recommendedBufferMinutes
+              ? 'optimal'
+              : 'tight';
+
+      const note = actualBufferMinutes < minRequiredBuffer
+        ? `Umstiegszeit an ${cleanStationName(transferStationName)} auf realistische ${minRequiredBuffer} Min. angepasst (vorher ${actualBufferMinutes} Min., Mindestzeit für ${criteria.categoryLabel}).`
+        : (quality === 'optimal'
+            ? `Ausreichender Umstiegspuffer (${effectiveBuffer} Min. an ${cleanStationName(transferStationName)})`
+            : `Knapper Umstieg (${effectiveBuffer} Min. an ${cleanStationName(transferStationName)}, Mindestzeit: ${minRequiredBuffer} Min.)`);
+
+      updatedTransferDetails.push({
+        stationName: cleanStationName(transferStationName),
+        bufferMinutes: effectiveBuffer,
+        category: criteria.category,
+        categoryLabel: criteria.categoryLabel,
+        minTransferMinutes: criteria.minTransferMinutes,
+        transferQuality: quality,
+        note
+      });
+    }
+
+    // Recalculate journey total duration and times
+    const startDepMs = new Date(updatedLegs[0].departure).getTime();
+    const endArrMs = new Date(updatedLegs[updatedLegs.length - 1].arrival).getTime();
+    const newDurationMinutes = Math.max(1, Math.round((endArrMs - startDepMs) / 60000));
+    const hours = Math.floor(newDurationMinutes / 60);
+    const mins = newDurationMinutes % 60;
+    const durationFormatted = hours > 0 ? `${hours} Std. ${mins} Min.` : `${mins} Min.`;
+
+    return {
+      ...journey,
+      arrival: updatedLegs[updatedLegs.length - 1].arrival,
+      plannedArrival: updatedLegs[updatedLegs.length - 1].plannedArrival,
+      durationMinutes: newDurationMinutes,
+      durationFormatted,
+      legs: updatedLegs,
+      transferDetails: updatedTransferDetails
+    };
+  }
+
+  /**
+   * Validiert und passt Umstiegszeiten für alle Verbindungen basierend auf der Stationsgröße
+   * in der Metropolregion Hamburg an, um unrealistisch kurze Umstiege zu vermeiden.
+   */
+  validateTransferTimes(journeys: ConnectionJourney[]): ConnectionJourney[] {
+    if (!Array.isArray(journeys)) return [];
+    return journeys.map(journey => this.validateJourneyTransferTimes(journey));
+  }
+
   private enhanceJourneys(
     journeys: ConnectionJourney[],
     params: {
+      dTicketOnly?: boolean;
+      includeFernverkehr?: boolean;
       isFromCurrentLocation?: boolean;
       currentLocationCoords?: { latitude: number; longitude: number };
     }
   ): ConnectionJourney[] {
-    return journeys.map((j: ConnectionJourney) => {
+    // 1. Enforce strict filter for regional trains: if includeFernverkehr is not true,
+    // strictly eliminate any long-distance ICE/IC/EC connections that might interfere with regional trip calculations
+    let candidates = journeys;
+    if (params.includeFernverkehr !== true) {
+      candidates = candidates.filter(j => !this.hasLongDistanceLegs(j));
+    }
+    if (params.dTicketOnly !== false) {
+      candidates = candidates.filter(j => j.isDeutschlandticketValid !== false && !this.hasLongDistanceLegs(j));
+    }
+
+    // 2. Validate and adjust transfer times based on station size in Hamburg Metropolitan Region to avoid unrealistic short transfers
+    candidates = this.validateTransferTimes(candidates);
+
+    return candidates.map((j: ConnectionJourney) => {
       const userCoords = params.currentLocationCoords || this.userLocation();
       const startLoc = j.origin?.location || j.legs[0]?.origin?.location;
       const isDticketValid = typeof j.isDeutschlandticketValid === 'boolean'
         ? j.isDeutschlandticketValid
-        : (j.legs && j.legs.length > 0 ? j.legs.every(l => l.isDeutschlandticketValid !== false) : true);
+        : (j.legs && j.legs.length > 0 ? j.legs.every(l => l.isDeutschlandticketValid !== false && !this.isLongDistanceLeg(l)) : true);
 
       if (params.isFromCurrentLocation) {
         let walk = { minutes: 5, distanceMeters: 400, distanceText: 'ca. 400 m' };
@@ -521,20 +830,22 @@ export class TransitService {
     const q = query.trim();
     if (!q) return [];
     
-    const loc = this.userLocation();
-    const cacheKey = `${q.toLowerCase()}_${loc ? Math.round(loc.latitude * 100) : 'none'}_${loc ? Math.round(loc.longitude * 100) : 'none'}`;
+    // Always apply Hamburg/Kiel regional context coordinates (Hamburg Hbf / Metropolitan center)
+    const HAMBURG_KIEL_DEFAULT_LOC = { latitude: 53.552736, longitude: 10.006909 };
+    const loc = this.userLocation() || HAMBURG_KIEL_DEFAULT_LOC;
+    const cacheKey = `${q.toLowerCase()}_${Math.round(loc.latitude * 100)}_${Math.round(loc.longitude * 100)}`;
 
     if (this.stationCache.has(cacheKey)) {
       return this.stationCache.get(cacheKey)!;
     }
 
-    // 1. Try server endpoint first (timeout fast in case on static Vercel)
+    // 1. Try server endpoint first with guaranteed Hamburg/Kiel context
     try {
-      const params = new URLSearchParams({ query: q });
-      if (loc) {
-        params.set('lat', String(loc.latitude));
-        params.set('lon', String(loc.longitude));
-      }
+      const params = new URLSearchParams({
+        query: q,
+        lat: String(loc.latitude),
+        lon: String(loc.longitude)
+      });
       const res = await fetch(`/api/stations?${params.toString()}`, { signal: AbortSignal.timeout(2000) });
       if (res.ok) {
         const data: Station[] = await res.json();
@@ -547,9 +858,9 @@ export class TransitService {
       // Backend unavailable or timed out, gracefully continue to direct engine
     }
 
-    // 2. Direct local engine fallback (works 100% on Vercel without serverless)
+    // 2. Direct local engine fallback with guaranteed Hamburg/Kiel context
     try {
-      const direct = await searchStationsDirect(q, loc?.latitude, loc?.longitude);
+      const direct = await searchStationsDirect(q, loc.latitude, loc.longitude);
       if (direct.length > 0) {
         this.stationCache.set(cacheKey, direct);
         return direct;
@@ -568,6 +879,7 @@ export class TransitService {
     departureTime?: string;
     dTicketOnly: boolean;
     includeFernverkehr: boolean;
+    minTransferTime?: string;
     products?: {
       regional?: boolean;
       suburban?: boolean;
@@ -589,6 +901,9 @@ export class TransitService {
     }
     if (params.departureTime) {
       queryParams.set('departure', params.departureTime);
+    }
+    if (params.minTransferTime && params.minTransferTime !== 'auto') {
+      queryParams.set('minTransferTime', params.minTransferTime);
     }
     if (params.products) {
       if (params.products.regional !== undefined) queryParams.set('regional', String(params.products.regional));
@@ -751,7 +1066,7 @@ export class TransitService {
     if (bundesland) {
       items = items.filter(d => d.bundesland.toLowerCase() === bundesland.toLowerCase());
     }
-    return items as RegionalGetaway[];
+    return items.map(d => ({ ...d, stationName: cleanStationName(d.stationName) })) as RegionalGetaway[];
   }
 
   async getSurpriseDestinations(maxMinutes: number, category?: string): Promise<RegionalGetaway[]> {
@@ -775,7 +1090,7 @@ export class TransitService {
       candidates = REGIONAL_DESTINATIONS_FROM_HAMBURG;
     }
     const shuffled = [...candidates].sort(() => 0.5 - Math.random());
-    return shuffled.slice(0, 4) as RegionalGetaway[];
+    return shuffled.slice(0, 4).map(d => ({ ...d, stationName: cleanStationName(d.stationName) })) as RegionalGetaway[];
   }
 
   getBundeslaender() {
@@ -804,12 +1119,14 @@ export class TransitService {
   }
 
   addFavoriteRoute(fromName: string, toName: string): void {
+    const fromClean = cleanStationName(fromName);
+    const toClean = cleanStationName(toName);
     const current = this.favoriteRoutes();
-    const id = `${fromName.toLowerCase()}-${toName.toLowerCase()}`;
+    const id = `${fromClean.toLowerCase()}-${toClean.toLowerCase()}`;
     if (!current.some(r => r.id === id)) {
       const updated = [
         ...current,
-        { id, fromName, toName, addedAt: new Date().toISOString() }
+        { id, fromName: fromClean, toName: toClean, addedAt: new Date().toISOString() }
       ];
       this.saveFavoriteRoutes(updated);
     }
@@ -821,7 +1138,9 @@ export class TransitService {
   }
 
   isFavoriteRoute(fromName: string, toName: string): boolean {
-    const id = `${fromName.toLowerCase()}-${toName.toLowerCase()}`;
+    const fromClean = cleanStationName(fromName);
+    const toClean = cleanStationName(toName);
+    const id = `${fromClean.toLowerCase()}-${toClean.toLowerCase()}`;
     return this.favoriteRoutes().some(r => r.id === id);
   }
 
@@ -847,15 +1166,17 @@ export class TransitService {
   }
 
   addFavoriteStation(station: Station): void {
+    const cleanedName = cleanStationName(station.name);
     const current = this.favoriteStations();
-    if (!current.some(s => s.name === station.name)) {
-      const updated = [...current, { id: station.id, name: station.name }];
+    if (!current.some(s => s.name === cleanedName)) {
+      const updated = [...current, { id: station.id, name: cleanedName }];
       this.saveFavoriteStations(updated);
     }
   }
 
   removeFavoriteStation(name: string): void {
-    const updated = this.favoriteStations().filter(s => s.name !== name);
+    const cleanedName = cleanStationName(name);
+    const updated = this.favoriteStations().filter(s => s.name !== name && s.name !== cleanedName);
     this.saveFavoriteStations(updated);
   }
 
@@ -867,7 +1188,7 @@ export class TransitService {
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+          return parsed.map((s: Station) => ({ ...s, name: cleanStationName(s.name) }));
         }
       }
     } catch {
@@ -875,7 +1196,7 @@ export class TransitService {
     }
     // Default 2 popular hubs if none in storage
     return [
-      { id: '8002549', name: 'Hamburg Hbf' },
+      { id: '8002549', name: 'Hauptbahnhof' },
       { id: '8000237', name: 'Lübeck Hbf' }
     ];
   }
@@ -901,10 +1222,11 @@ export class TransitService {
     ) {
       return;
     }
-    const current = this.recentStations().filter(s => s.name.toLowerCase() !== station.name.toLowerCase());
+    const cleanedName = cleanStationName(station.name);
+    const current = this.recentStations().filter(s => s.name.toLowerCase() !== cleanedName.toLowerCase() && s.name.toLowerCase() !== station.name.toLowerCase());
     // Prepend to front and keep top 10
     const updated = [
-      { id: station.id, name: station.name, location: station.location },
+      { id: station.id, name: cleanedName, location: station.location },
       ...current
     ].slice(0, 10);
     this.saveRecentStations(updated);

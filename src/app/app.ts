@@ -16,6 +16,7 @@ import { HamburgHubView } from './views/hamburg-hub/hamburg-hub-view';
 import { SurpriseView } from './views/surprise/surprise-view';
 import { FavoritesView } from './views/favorites/favorites-view';
 import { AccessibilityView } from './views/accessibility/accessibility-view';
+import { AboutView } from './views/about/about-view';
 import { MapView } from './components/map/map-view';
 import { JourneyDetail } from './components/journey-detail/journey-detail';
 import { PwaInstallModal } from './components/pwa-install/pwa-install';
@@ -31,6 +32,7 @@ import { PwaInstallModal } from './components/pwa-install/pwa-install';
     SurpriseView,
     FavoritesView,
     AccessibilityView,
+    AboutView,
     MapView,
     JourneyDetail,
     PwaInstallModal
@@ -56,7 +58,7 @@ export class App {
 
   isExtraTabActive(): boolean {
     const tab = this.currentTab();
-    return tab === 'favorites' || tab === 'hamburg-hub' || tab === 'surprise' || tab === 'accessibility';
+    return tab === 'favorites' || tab === 'hamburg-hub' || tab === 'surprise' || tab === 'accessibility' || tab === 'about';
   }
 
   getExtraTabLabel(): string {
@@ -65,6 +67,7 @@ export class App {
     if (tab === 'hamburg-hub') return 'Regionalnetz';
     if (tab === 'surprise') return 'Ausflugsplaner';
     if (tab === 'accessibility') return 'Barrierefreiheit';
+    if (tab === 'about') return 'Über uns & Mission';
     return 'Mehr';
   }
 
@@ -74,6 +77,7 @@ export class App {
     if (tab === 'hamburg-hub') return 'anchor';
     if (tab === 'surprise') return 'shuffle';
     if (tab === 'accessibility') return 'accessible';
+    if (tab === 'about') return 'eco';
     return 'menu';
   }
 
@@ -114,12 +118,19 @@ export class App {
     }
   }
 
-  setTab(tab: 'planner' | 'live-board' | 'hamburg-hub' | 'surprise' | 'favorites' | 'accessibility') {
+  scrollToTop(): void {
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }
+
+  setTab(tab: 'planner' | 'live-board' | 'hamburg-hub' | 'surprise' | 'favorites' | 'accessibility' | 'about') {
     if (tab === 'planner' && this.currentTab() === 'planner' && this.transitService.hasPlannerResults()) {
       this.navigateToHome();
     } else {
       this.transitService.activeTab.set(tab);
     }
+    this.scrollToTop();
   }
 
   onShowJourneyOnMap(journey: ConnectionJourney) {

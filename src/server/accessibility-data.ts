@@ -1,4 +1,5 @@
 import { ConnectionJourney, RouteAccessibilitySummary, StationAccessibility } from '../app/models/transit.models';
+import { cleanStationName } from '../app/utils/station-utils';
 
 /**
  * Live Accessibility & Elevator Data for Hamburg and Regional Hubs
@@ -424,12 +425,20 @@ export const HAMBURG_ACCESSIBILITY_DATA: Record<string, StationAccessibility> = 
  */
 function normalizeStationName(raw: string): string {
   const s = raw.trim();
+  const c = cleanStationName(s);
   for (const key of Object.keys(HAMBURG_ACCESSIBILITY_DATA)) {
-    if (s.toLowerCase().includes(key.toLowerCase()) || key.toLowerCase().includes(s.toLowerCase())) {
+    const ck = cleanStationName(key);
+    if (
+      s.toLowerCase().includes(key.toLowerCase()) ||
+      key.toLowerCase().includes(s.toLowerCase()) ||
+      c.toLowerCase() === ck.toLowerCase() ||
+      c.toLowerCase().includes(ck.toLowerCase()) ||
+      ck.toLowerCase().includes(c.toLowerCase())
+    ) {
       return key;
     }
   }
-  return s;
+  return c || s;
 }
 
 /**
@@ -439,14 +448,22 @@ export function getStationAccessibility(stationNameOrId: string): StationAccessi
   const norm = normalizeStationName(stationNameOrId);
   const found = HAMBURG_ACCESSIBILITY_DATA[norm];
   if (found) {
-    return found;
+    return {
+      ...found,
+      stationName: cleanStationName(found.stationName),
+      elevators: found.elevators.map(e => ({
+        ...e,
+        stationName: cleanStationName(e.stationName)
+      }))
+    };
   }
 
   // Generative fallback for other German stations
-  const isMajor = norm.includes('Hbf') || norm.includes('Hamburg');
+  const isMajor = norm.includes('Hbf') || norm.includes('Hauptbahnhof');
+  const cleanedName = cleanStationName(norm);
   return {
-    stationId: 'gen-' + norm.toLowerCase().replace(/\s+/g, '-'),
-    stationName: norm,
+    stationId: 'gen-' + cleanedName.toLowerCase().replace(/\s+/g, '-'),
+    stationName: cleanedName,
     isStepFree: true,
     overallScorePercent: isMajor ? 95 : 90,
     tactilePaving: isMajor,
@@ -463,8 +480,8 @@ export function getStationAccessibility(stationNameOrId: string): StationAccessi
     elevators: isMajor
       ? [
           {
-            id: `elev-${norm.toLowerCase()}-1`,
-            stationName: norm,
+            id: `elev-${cleanedName.toLowerCase().replace(/[^a-z0-9]/g, '-')}-1`,
+            stationName: cleanedName,
             description: 'Aufzug Bahnsteig ↔ Zugangsebene',
             state: 'in_service',
             lastUpdated: 'vor 15 Min.'
@@ -517,7 +534,7 @@ export function evaluateRouteAccessibility(journey: ConnectionJourney): RouteAcc
     }
 
     stationNotes.push({
-      stationName,
+      stationName: cleanStationName(stationName),
       isStepFree: acc.isStepFree,
       hasDisruption,
       note: acc.activeDisruptions.length > 0 ? acc.activeDisruptions[0] : acc.stepFreeAccessNote || 'Stufenfreier Zugang'

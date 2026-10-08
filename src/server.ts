@@ -10,7 +10,10 @@ import {
   searchStations,
   searchConnections,
   getStationDepartures,
-  getJourneyLiveRealtimeStatus
+  getJourneyLiveRealtimeStatus,
+  cleanStationName,
+  cleanStation,
+  cleanJourney
 } from './server/transit-adapter';
 import {
   REGIONAL_DESTINATIONS_FROM_HAMBURG,
@@ -43,8 +46,10 @@ app.get('/api/stations', async (req, res) => {
     }
     const lat = req.query['lat'] ? parseFloat(String(req.query['lat'])) : undefined;
     const lon = req.query['lon'] ? parseFloat(String(req.query['lon'])) : undefined;
-    const stations = await searchStations(query, isNaN(lat as number) ? undefined : lat, isNaN(lon as number) ? undefined : lon);
-    return res.json(stations);
+    const finalLat = (!isNaN(lat as number) && lat !== undefined) ? lat : 53.552736;
+    const finalLon = (!isNaN(lon as number) && lon !== undefined) ? lon : 10.006909;
+    const stations = await searchStations(query, finalLat, finalLon);
+    return res.json(stations.map(cleanStation));
   } catch (error) {
     console.error('Error searching stations:', error);
     return res.status(500).json({ error: 'Fehler bei der Stationssuche' });
@@ -197,6 +202,7 @@ app.get('/api/connections', async (req, res) => {
     const departure = req.query['departure'] ? String(req.query['departure']) : undefined;
     const dTicketOnly = req.query['dTicketOnly'] !== 'false';
     const includeFernverkehr = req.query['includeFernverkehr'] === 'true';
+    const minTransferTime = req.query['minTransferTime'] ? String(req.query['minTransferTime']) : undefined;
 
     const regional = req.query['regional'] !== 'false';
     const suburban = req.query['suburban'] !== 'false';
@@ -214,6 +220,7 @@ app.get('/api/connections', async (req, res) => {
       departure,
       dTicketOnly,
       includeFernverkehr,
+      minTransferTime,
       products: {
         regional,
         suburban,
@@ -223,15 +230,15 @@ app.get('/api/connections', async (req, res) => {
     });
 
     // Enrich each journey with live accessibility and elevator status
-    const enrichedJourneys = journeys.map(j => ({
+    const enrichedJourneys = journeys.map(j => cleanJourney({
       ...j,
       accessibility: evaluateRouteAccessibility(j)
     }));
 
     return res.json({
-      from,
-      to,
-      via,
+      from: cleanStationName(from),
+      to: cleanStationName(to),
+      via: via ? cleanStationName(via) : undefined,
       dTicketOnly,
       includeFernverkehr,
       count: enrichedJourneys.length,
@@ -313,7 +320,10 @@ app.get('/api/destinations/from-hamburg', (req, res) => {
   if (bundesland) {
     items = items.filter(d => d.bundesland.toLowerCase() === bundesland.toLowerCase());
   }
-  return res.json(items);
+  return res.json(items.map(d => ({
+    ...d,
+    stationName: cleanStationName(d.stationName)
+  })));
 });
 
 // 5. Bundesländer metadata
@@ -337,7 +347,10 @@ app.get('/api/surprise', (req, res) => {
 
   // Pick random candidate or shuffle
   const shuffled = [...candidates].sort(() => 0.5 - Math.random());
-  return res.json(shuffled.slice(0, 4));
+  return res.json(shuffled.slice(0, 4).map(d => ({
+    ...d,
+    stationName: cleanStationName(d.stationName)
+  })));
 });
 
 /**

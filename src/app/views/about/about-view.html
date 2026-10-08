@@ -1,0 +1,842 @@
+<div class="space-y-8 animate-in fade-in duration-300">
+
+  <!-- 1. Hero Header Banner: Die grüne Brücke nach Nicaragua -->
+  <section class="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#1B4332] via-[#2D6A4F] to-[#081C15] text-white p-6 sm:p-10 shadow-lg border border-[#40916C]/40">
+    <!-- Subtle Background Pattern Elements -->
+    <div class="absolute -right-16 -top-16 w-80 h-80 rounded-full bg-[#52B788]/15 blur-3xl pointer-events-none" aria-hidden="true"></div>
+    <div class="absolute -left-12 -bottom-12 w-64 h-64 rounded-full bg-[#D8F3DC]/10 blur-2xl pointer-events-none" aria-hidden="true"></div>
+
+    <div class="relative z-10 max-w-4xl space-y-4">
+      <!-- Badge -->
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 backdrop-blur-md border border-white/20 text-xs font-bold tracking-wide text-[#D8F3DC]">
+        <span class="mat-icon text-sm text-[#74C69D]">eco</span>
+        <span>Klimagerechtigkeit • Aufforstung • Bildung für Kinder</span>
+      </div>
+
+      <h1 class="text-2xl sm:text-4xl lg:text-5xl font-black tracking-tight leading-tight text-white">
+        Über uns: Die grüne Brücke von der Schiene nach Nicaragua
+      </h1>
+
+      <p class="text-sm sm:text-base lg:text-lg text-[#E8F5E9] font-medium leading-relaxed max-w-3xl">
+        Wie deine real gefahrenen Bahn-Kilometer in Deutschland den CO₂-Ausstoß drastisch senken – und wie dieses vermiedene CO₂ direkt die Wiederaufforstung und Schulbildung für Mädchen und Jungen in der ländlichen Gemeinde <strong class="text-white underline decoration-[#74C69D] decoration-2 underline-offset-4">La Perla nahe Achuapa (Nicaragua)</strong> finanziert.
+      </p>
+
+      <!-- Key Pill Indicators -->
+      <div class="pt-2 flex flex-wrap gap-2.5 sm:gap-3 text-xs sm:text-sm font-semibold">
+        <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-black/25 backdrop-blur-sm border border-white/10 text-[#B7E4C7]">
+          <span class="mat-icon text-base">train</span>
+          Echte Schienen-Kilometer
+        </span>
+        <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-black/25 backdrop-blur-sm border border-white/10 text-[#B7E4C7]">
+          <span class="mat-icon text-base">forest</span>
+          Heimische Baumarten in La Perla
+        </span>
+        <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-black/25 backdrop-blur-sm border border-white/10 text-[#B7E4C7]">
+          <span class="mat-icon text-base">school</span>
+          Schulpatenschaft & Trinkwasser
+        </span>
+        <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-black/25 backdrop-blur-sm border border-white/10 text-[#B7E4C7]">
+          <span class="mat-icon text-base">payments</span>
+          CO₂-Kompensation nach Verursacherprinzip
+        </span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Navigation Pill Tabs for Deep Dive Sections -->
+  <nav class="flex flex-wrap items-center gap-2 p-1.5 bg-white border border-[#E6DED6] rounded-2xl shadow-2xs" role="tablist" aria-label="Unterabschnitte der Über-Uns-Seite">
+    <button
+      type="button"
+      role="tab"
+      [attr.aria-selected]="activeSubSection() === 'story'"
+      (click)="activeSubSection.set('story')"
+      [class.bg-[#1B4332]]="activeSubSection() === 'story'"
+      [class.text-white]="activeSubSection() === 'story'"
+      [class.shadow-2xs]="activeSubSection() === 'story'"
+      [class.text-[#4E342E]]="activeSubSection() !== 'story'"
+      [class.hover:bg-[#FAF7F2]]="activeSubSection() !== 'story'"
+      class="flex-1 min-w-[140px] px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 cursor-pointer transition-all"
+    >
+      <span class="mat-icon text-base">auto_stories</span>
+      <span>1. Die Geschichte</span>
+    </button>
+
+    <button
+      type="button"
+      role="tab"
+      [attr.aria-selected]="activeSubSection() === 'business-model'"
+      (click)="activeSubSection.set('business-model')"
+      [class.bg-[#1B4332]]="activeSubSection() === 'business-model'"
+      [class.text-white]="activeSubSection() === 'business-model'"
+      [class.shadow-2xs]="activeSubSection() === 'business-model'"
+      [class.text-[#4E342E]]="activeSubSection() !== 'business-model'"
+      [class.hover:bg-[#FAF7F2]]="activeSubSection() !== 'business-model'"
+      class="flex-1 min-w-[140px] px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 cursor-pointer transition-all"
+    >
+      <span class="mat-icon text-base">balance</span>
+      <span>2. Das Geschäftsmodell</span>
+    </button>
+
+    <button
+      type="button"
+      role="tab"
+      [attr.aria-selected]="activeSubSection() === 'nicaragua'"
+      (click)="activeSubSection.set('nicaragua')"
+      [class.bg-[#1B4332]]="activeSubSection() === 'nicaragua'"
+      [class.text-white]="activeSubSection() === 'nicaragua'"
+      [class.shadow-2xs]="activeSubSection() === 'nicaragua'"
+      [class.text-[#4E342E]]="activeSubSection() !== 'nicaragua'"
+      [class.hover:bg-[#FAF7F2]]="activeSubSection() !== 'nicaragua'"
+      class="flex-1 min-w-[140px] px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 cursor-pointer transition-all"
+    >
+      <span class="mat-icon text-base">volunteer_activism</span>
+      <span>3. La Perla & Kinder</span>
+    </button>
+
+    <button
+      type="button"
+      role="tab"
+      [attr.aria-selected]="activeSubSection() === 'calculator'"
+      (click)="activeSubSection.set('calculator')"
+      [class.bg-[#1B4332]]="activeSubSection() === 'calculator'"
+      [class.text-white]="activeSubSection() === 'calculator'"
+      [class.shadow-2xs]="activeSubSection() === 'calculator'"
+      [class.text-[#4E342E]]="activeSubSection() !== 'calculator'"
+      [class.hover:bg-[#FAF7F2]]="activeSubSection() !== 'calculator'"
+      class="flex-1 min-w-[140px] px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 cursor-pointer transition-all"
+    >
+      <span class="mat-icon text-base">calculate</span>
+      <span>4. Dein Impact-Rechner</span>
+    </button>
+  </nav>
+
+  <!-- 2. PHOTO GALLERY & VISUAL STORYTELLING: 4 Generierte Bilder -->
+  <section class="space-y-4">
+    <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-2 px-1">
+      <div>
+        <span class="text-xs font-bold uppercase tracking-wider text-[#2D6A4F] flex items-center gap-1.5">
+          <span class="mat-icon text-sm">photo_camera</span>
+          Bilder aus der Gemeinde La Perla & Deutschland
+        </span>
+        <h2 class="text-xl sm:text-2xl font-black text-[#1F1612]">
+          Eindrücke vor Ort: Von der Schiene in die Schule
+        </h2>
+      </div>
+      <p class="text-xs text-[#795548] max-w-sm">
+        Klicke auf ein Bild für Details zur Aufforstung, den Kindern der Escuela La Perla und der Mobilitätsbrücke.
+      </p>
+    </div>
+
+    <!-- 4-Card Visual Bento Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+
+      <!-- Card 1: Gemeinsame Aufforstung La Perla -->
+      <button
+        type="button"
+        class="group relative bg-white border border-[#E6DED6] rounded-2xl overflow-hidden shadow-2xs hover:shadow-md transition-all cursor-pointer flex flex-col text-left p-0 w-full"
+        (click)="openPhoto({
+          src: '/src/assets/images/reforestation_la_perla_1791492083612.jpg',
+          title: 'Gemeinschaftliche Aufforstung in La Perla (Achuapa)',
+          subtitle: 'Familien, Kleinbauern und Jugendliche pflanzen widerstandsfähige Mischwälder',
+          description: 'Im Hügelland von La Perla nahe Achuapa pflanzen Dorfbewohner gemeinsam junge Setzlinge. Jeder Baum bindet CO₂, festigt erosionsgefährdete Böden und sichert das Grundwasser für zukünftige Generationen im nicaraguanischen Trockengürtel.'
+        })"
+      >
+        <div class="relative aspect-video w-full overflow-hidden bg-[#2D6A4F]/10">
+          <img
+            src="/src/assets/images/reforestation_la_perla_1791492083612.jpg"
+            alt="Gemeinschaftliche Aufforstung durch Familien und Kinder in La Perla, Nicaragua"
+            referrerpolicy="no-referrer"
+            class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+          />
+          <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
+          <span class="absolute top-3 left-3 bg-[#1B4332]/90 backdrop-blur-md text-[#D8F3DC] text-[11px] font-bold px-2.5 py-1 rounded-lg border border-white/20 flex items-center gap-1">
+            <span class="mat-icon text-xs">nature</span>
+            Wiederaufforstung
+          </span>
+          <div class="absolute bottom-3 left-3 right-3 text-white">
+            <h3 class="font-bold text-base sm:text-lg leading-tight drop-shadow-sm">
+              Familien & Kinder pflanzen Hoffnung in La Perla
+            </h3>
+            <p class="text-xs text-white/80 line-clamp-1 mt-0.5">
+              Heimische Setzlinge schützen Böden und Wasserquellen bei Achuapa.
+            </p>
+          </div>
+        </div>
+        <div class="p-4 bg-white flex items-center justify-between text-xs text-[#5D4037] w-full">
+          <span class="flex items-center gap-1 font-semibold text-[#1B4332]">
+            <span class="mat-icon text-sm">place</span>
+            La Perla, Achuapa (Nicaragua)
+          </span>
+          <span class="text-[#795548] font-bold group-hover:text-[#1B4332] flex items-center gap-1 transition-colors">
+            Details ansehen
+            <span class="mat-icon text-sm">arrow_forward</span>
+          </span>
+        </div>
+      </button>
+
+      <!-- Card 2: Bildung für Kinder der Escuela La Perla -->
+      <button
+        type="button"
+        class="group relative bg-white border border-[#E6DED6] rounded-2xl overflow-hidden shadow-2xs hover:shadow-md transition-all cursor-pointer flex flex-col text-left p-0 w-full"
+        (click)="openPhoto({
+          src: '/src/assets/images/children_education_la_perla_1791492099104.jpg',
+          title: 'Schulbildung & Zukunft für Mädchen und Jungen',
+          subtitle: 'Schülerinnen und Schüler der Escuela La Perla mit ihren ersten Baumsetzlingen',
+          description: 'Bildung ist der nachhaltigste Hebel gegen Armut und Klimakrise. Aus den vermiedenen CO₂-Abgaben werden Schulhefte, Lernmaterialien, Rucksäcke und biologische Schulgärten finanziert. Die Kinder lernen Naturwissenschaften direkt am lebenden Wald.'
+        })"
+      >
+        <div class="relative aspect-video w-full overflow-hidden bg-[#2D6A4F]/10">
+          <img
+            src="/src/assets/images/children_education_la_perla_1791492099104.jpg"
+            alt="Schulkinder der Escuela La Perla mit Büchern und Baumsetzlingen"
+            referrerpolicy="no-referrer"
+            class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+          />
+          <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
+          <span class="absolute top-3 left-3 bg-[#B71C1C]/90 backdrop-blur-md text-white text-[11px] font-bold px-2.5 py-1 rounded-lg border border-white/20 flex items-center gap-1">
+            <span class="mat-icon text-xs">school</span>
+            Bildung & Patenschaft
+          </span>
+          <div class="absolute bottom-3 left-3 right-3 text-white">
+            <h3 class="font-bold text-base sm:text-lg leading-tight drop-shadow-sm">
+              Escuela La Perla: Bildung & Lebensfreude
+            </h3>
+            <p class="text-xs text-white/80 line-clamp-1 mt-0.5">
+              Schulmaterialien und ökologische Natur-AGs für Mädchen und Jungen.
+            </p>
+          </div>
+        </div>
+        <div class="p-4 bg-white flex items-center justify-between text-xs text-[#5D4037] w-full">
+          <span class="flex items-center gap-1 font-semibold text-[#1B4332]">
+            <span class="mat-icon text-sm">favorite</span>
+            Förderung junger Generationen
+          </span>
+          <span class="text-[#795548] font-bold group-hover:text-[#1B4332] flex items-center gap-1 transition-colors">
+            Details ansehen
+            <span class="mat-icon text-sm">arrow_forward</span>
+          </span>
+        </div>
+      </button>
+
+      <!-- Card 3: Ökologische Baumschulen & Agroforstwirtschaft -->
+      <button
+        type="button"
+        class="group relative bg-white border border-[#E6DED6] rounded-2xl overflow-hidden shadow-2xs hover:shadow-md transition-all cursor-pointer flex flex-col text-left p-0 w-full"
+        (click)="openPhoto({
+          src: '/src/assets/images/agroforestry_trees_nicaragua_1791492111355.jpg',
+          title: 'Ökologische Baumschulen & Mischkultur nahe Achuapa',
+          subtitle: 'Bäuerliche Baumzucht schützt vor Dürre und sichert Ernährung',
+          description: 'In den dörflichen Baumschulen wachsen zehntausende Setzlinge heran: Madroño (Nicaraguas Nationalbaum), Edelhölzer wie Cedro Real sowie Avocado-, Mango- und Zitrusbäume. Die Agroforstwirtschaft kombiniert Waldschutz mit nachhaltiger Ernährung für die Dorfgemeinschaft.'
+        })"
+      >
+        <div class="relative aspect-video w-full overflow-hidden bg-[#2D6A4F]/10">
+          <img
+            src="/src/assets/images/agroforestry_trees_nicaragua_1791492111355.jpg"
+            alt="Baumschule und Agroforst-Projekt in der Region Achuapa, Nicaragua"
+            referrerpolicy="no-referrer"
+            class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+          />
+          <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
+          <span class="absolute top-3 left-3 bg-[#1B4332]/90 backdrop-blur-md text-[#D8F3DC] text-[11px] font-bold px-2.5 py-1 rounded-lg border border-white/20 flex items-center gap-1">
+            <span class="mat-icon text-xs">local_florist</span>
+            Baumschule vor Ort
+          </span>
+          <div class="absolute bottom-3 left-3 right-3 text-white">
+            <h3 class="font-bold text-base sm:text-lg leading-tight drop-shadow-sm">
+              Setzlinge gegen Dürre & Klimawandel
+            </h3>
+            <p class="text-xs text-white/80 line-clamp-1 mt-0.5">
+              Heimische Arten und Nutzbäume für sauberes Wasser und Artenvielfalt.
+            </p>
+          </div>
+        </div>
+        <div class="p-4 bg-white flex items-center justify-between text-xs text-[#5D4037] w-full">
+          <span class="flex items-center gap-1 font-semibold text-[#1B4332]">
+            <span class="mat-icon text-sm">water_drop</span>
+            Wasserschutz im Trockenkorridor
+          </span>
+          <span class="text-[#795548] font-bold group-hover:text-[#1B4332] flex items-center gap-1 transition-colors">
+            Details ansehen
+            <span class="mat-icon text-sm">arrow_forward</span>
+          </span>
+        </div>
+      </button>
+
+      <!-- Card 4: Die Brücke: Bahnkilometer vermeiden CO2 -->
+      <button
+        type="button"
+        class="group relative bg-white border border-[#E6DED6] rounded-2xl overflow-hidden shadow-2xs hover:shadow-md transition-all cursor-pointer flex flex-col text-left p-0 w-full"
+        (click)="openPhoto({
+          src: '/src/assets/images/co2_climate_bridge_1791492128829.jpg',
+          title: 'Die Mobilitätsbrücke: Von der Schiene zum Tropenwald',
+          subtitle: 'Warum Schienenverkehr der größte Hebel für CO₂-Vermeidung ist',
+          description: 'In Deutschland erzeugt ein Regionalzug mit Ökostrom nur einen Bruchteil der Emissionen eines Flugzeugs oder Pkws. Anstatt dass Umweltabgaben in bürokratischen Kanälen versickern, fließt der Wert des vermiedenen CO₂ direkt als finanzielle Entlastung für dich und als Zukunftschance nach La Perla.'
+        })"
+      >
+        <div class="relative aspect-video w-full overflow-hidden bg-[#2D6A4F]/10">
+          <img
+            src="/src/assets/images/co2_climate_bridge_1791492128829.jpg"
+            alt="Moderner grüner Regionalzug und saubere CO2-neutrale Mobilität"
+            referrerpolicy="no-referrer"
+            class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+          />
+          <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
+          <span class="absolute top-3 left-3 bg-[#2D6A4F]/90 backdrop-blur-md text-white text-[11px] font-bold px-2.5 py-1 rounded-lg border border-white/20 flex items-center gap-1">
+            <span class="mat-icon text-xs">electric_bolt</span>
+            CO₂-Vermeidung
+          </span>
+          <div class="absolute bottom-3 left-3 right-3 text-white">
+            <h3 class="font-bold text-base sm:text-lg leading-tight drop-shadow-sm">
+              Verschmutzung kostet Geld – Bahnfahren sät Zukunft
+            </h3>
+            <p class="text-xs text-white/80 line-clamp-1 mt-0.5">
+              Fluggesellschaften zahlen für Abgase – wir belohnen Vermeidung.
+            </p>
+          </div>
+        </div>
+        <div class="p-4 bg-white flex items-center justify-between text-xs text-[#5D4037] w-full">
+          <span class="flex items-center gap-1 font-semibold text-[#1B4332]">
+            <span class="mat-icon text-sm">savings</span>
+            Monetärer Klimabonus
+          </span>
+          <span class="text-[#795548] font-bold group-hover:text-[#1B4332] flex items-center gap-1 transition-colors">
+            Details ansehen
+            <span class="mat-icon text-sm">arrow_forward</span>
+          </span>
+        </div>
+      </button>
+
+    </div>
+  </section>
+
+  <!-- 3. DEEP DIVE SECTION 1: DAS GESCHÄFTSMODELL & DER MONETÄRE ANREIZ -->
+  <section class="bg-white border border-[#E6DED6] rounded-3xl p-6 sm:p-9 shadow-sm space-y-6">
+    <div class="flex items-center gap-3">
+      <span class="w-10 h-10 rounded-xl bg-[#EDF9F0] text-[#1B4332] flex items-center justify-center font-black">
+        <span class="mat-icon text-2xl">balance</span>
+      </span>
+      <div>
+        <span class="text-xs font-bold uppercase tracking-wider text-[#2D6A4F]">Nachhaltiges Wirtschaftsmodell</span>
+        <h2 class="text-xl sm:text-2xl font-black text-[#1F1612]">
+          Die Geschäftsidee: Verschmutzung kostet – Vermeidung wird belohnt!
+        </h2>
+      </div>
+    </div>
+
+    <!-- Core Business Explanation Box -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+      <!-- Pillar 1 -->
+      <div class="p-5 rounded-2xl bg-[#FAF7F2] border border-[#E6DED6] space-y-3">
+        <div class="flex items-center gap-2 font-bold text-[#1F1612]">
+          <span class="w-7 h-7 rounded-lg bg-[#B71C1C]/10 text-[#B71C1C] flex items-center justify-center text-sm font-black">1</span>
+          <span>Das Verursacherprinzip</span>
+        </div>
+        <p class="text-xs text-[#5D4037] leading-relaxed">
+          Weltweit und in Europa müssen Fluggesellschaften und fossile Industrien hohe Abgaben auf ihren Ausstoß zahlen (EU-Emissionshandel ETS, Luftverkehrsteuer). <strong>Wer die Umwelt verschmutzt, muss dafür tief in die Tasche greifen.</strong>
+        </p>
+      </div>
+
+      <!-- Pillar 2 -->
+      <div class="p-5 rounded-2xl bg-[#EDF9F0] border border-[#B7E4C7] space-y-3">
+        <div class="flex items-center gap-2 font-bold text-[#1B4332]">
+          <span class="w-7 h-7 rounded-lg bg-[#1B4332] text-white flex items-center justify-center text-sm font-black">2</span>
+          <span>Echte Schienen-Kilometer</span>
+        </div>
+        <p class="text-xs text-[#2D6A4F] leading-relaxed">
+          Über unsere App wird für jede zurückgelegte Nahverkehrsstrecke die <strong>real vermiedene CO₂-Menge</strong> im Vergleich zum Inlandsflug und Pkw exakt erfasst. Vermeidung ist aktiver Klimaschutz und hat einen nachweisbaren volkswirtschaftlichen Wert.
+        </p>
+      </div>
+
+      <!-- Pillar 3 -->
+      <div class="p-5 rounded-2xl bg-[#FAF7F2] border border-[#E6DED6] space-y-3">
+        <div class="flex items-center gap-2 font-bold text-[#1F1612]">
+          <span class="w-7 h-7 rounded-lg bg-[#D4A373]/20 text-[#8D6E63] flex items-center justify-center text-sm font-black">3</span>
+          <span>Der Monetäre Anreiz</span>
+        </div>
+        <p class="text-xs text-[#5D4037] leading-relaxed">
+          Aus Partner-Klimafonds und CO₂-Kompensationsabgaben entsteht eine <strong>Klima-Prämie</strong>. Reisende können diesen Betrag als Gutschrift einlösen oder zu 100% direkt als Baum- und Bildungspatenschaft nach <strong>La Perla (Nicaragua)</strong> fließen lassen.
+        </p>
+      </div>
+    </div>
+
+    <!-- Transparent Policy Disclaimer -->
+    <div class="p-4 sm:p-5 rounded-2xl bg-[#FBF7F0] border border-[#D4A373]/50 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+      <span class="w-10 h-10 rounded-xl bg-[#D4A373]/20 text-[#8D6E63] flex items-center justify-center shrink-0">
+        <span class="mat-icon text-xl">verified</span>
+      </span>
+      <div class="space-y-1">
+        <h4 class="font-bold text-sm text-[#3E2723]">Transparenz-Garantie für alle Nutzerinnen und Nutzer</h4>
+        <p class="text-xs text-[#5D4037] leading-relaxed">
+          Wir stellen unmissverständlich klar: Dies ist eine Initiative, die <strong>ausschließlich aus ökologischem Bewusstsein zur CO₂-Vermeidung</strong> geschaffen wurde. Wir verwenden die Gelder, die Regierungen von Airlines für deren Schadstoffausstoß verlangen, um sie dorthin umzuleiten, wo das Klima am stärksten geschützt und bedürftigen Kindern am unmittelbarsten geholfen wird: nach La Perla bei Achuapa.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. DEEP DIVE SECTION 2: DIE GEMEINDE LA PERLA BEI ACHUAPA (NICARAGUA) -->
+  <section class="bg-white border border-[#E6DED6] rounded-3xl p-6 sm:p-9 shadow-sm space-y-6">
+    <div class="flex items-center gap-3">
+      <span class="w-10 h-10 rounded-xl bg-[#EDF9F0] text-[#1B4332] flex items-center justify-center font-black">
+        <span class="mat-icon text-2xl">pin_drop</span>
+      </span>
+      <div>
+        <span class="text-xs font-bold uppercase tracking-wider text-[#2D6A4F]">Hilfe vor Ort in Zentralamerika</span>
+        <h2 class="text-xl sm:text-2xl font-black text-[#1F1612]">
+          Die Gemeinschaft La Perla nahe Achuapa in Nicaragua
+        </h2>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+      <div class="lg:col-span-7 space-y-4 text-xs sm:text-sm text-[#4E342E] leading-relaxed">
+        <p>
+          Die ländliche Dorfgemeinschaft <strong>La Perla</strong> liegt eingebettet in den zerklüfteten Hügeln des Landkreises Achuapa im Departamento León im Norden Nicaraguas. Diese Region zählt zum zentralamerikanischen <em>Corredor Seco</em> (Trockengürtel) und leidet wie kaum ein zweiter Landstrich unter unberechenbaren Dürren und schweren tropischen Starkregen.
+        </p>
+        <p>
+          Viele Kleinbauernfamilien leben vom traditionellen Anbau von Sesam, Bohnen und Mais. Wenn der Regen ausbleibt oder Böden erodieren, geraten die Familien in Not. Hier setzt unsere Partnerschaft an:
+        </p>
+
+        <!-- Bullet List of Direct Aid -->
+        <div class="space-y-2.5 pt-1">
+          <div class="flex items-start gap-2.5">
+            <span class="w-5 h-5 rounded-md bg-[#EDF9F0] text-[#1B4332] flex items-center justify-center shrink-0 mt-0.5">
+              <span class="mat-icon text-xs">check</span>
+            </span>
+            <div>
+              <strong class="text-[#1F1612]">Wiederaufforstung heimischer Bäume:</strong>
+              Es werden keine Monokulturen gepflanzt, sondern heimische Arten wie Madroño (Nicaraguas Nationalbaum), Cedro Real, Guazuma sowie Obstbäume (Avocado, Zitrus), die Böden festigen und Nahrung sichern.
+            </div>
+          </div>
+
+          <div class="flex items-start gap-2.5">
+            <span class="w-5 h-5 rounded-md bg-[#EDF9F0] text-[#1B4332] flex items-center justify-center shrink-0 mt-0.5">
+              <span class="mat-icon text-xs">check</span>
+            </span>
+            <div>
+              <strong class="text-[#1F1612]">Schulbildung für Mädchen & Jungen:</strong>
+              Finanzierung von Schulheften, Stiften, Lesebüchern, Schulrucksäcken und wetterfesten Schuhen für die Kinder der <em>Escuela La Perla</em>, damit kein Kind wegen Armut die Schule abbrechen muss.
+            </div>
+          </div>
+
+          <div class="flex items-start gap-2.5">
+            <span class="w-5 h-5 rounded-md bg-[#EDF9F0] text-[#1B4332] flex items-center justify-center shrink-0 mt-0.5">
+              <span class="mat-icon text-xs">check</span>
+            </span>
+            <div>
+              <strong class="text-[#1F1612]">Sauberes Trinkwasser & Schulgarten:</strong>
+              Erhalt der Dorfwasserstellen und Aufbau eines biologischen Schulgartens, in dem die Kinder spielerisch Umweltwissen und gesunde Ernährung erlernen.
+            </div>
+          </div>
+
+          <div class="flex items-start gap-2.5">
+            <span class="w-5 h-5 rounded-md bg-[#EDF9F0] text-[#1B4332] flex items-center justify-center shrink-0 mt-0.5">
+              <span class="mat-icon text-xs">check</span>
+            </span>
+            <div>
+              <strong class="text-[#1F1612]">Faire Entlohnung für Kleinbauern:</strong>
+              Die örtlichen Familien werden für die Pflege und den Schutz der Baumschulen direkt und fair entlohnt.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Map & Facts Card -->
+      <div class="lg:col-span-5 bg-[#FAF7F2] border border-[#E6DED6] rounded-2xl p-5 space-y-4">
+        <div class="flex items-center justify-between border-b border-[#E6DED6] pb-3">
+          <div class="font-bold text-sm text-[#1F1612]">Steckbrief La Perla</div>
+          <span class="px-2 py-0.5 rounded-full bg-[#1B4332] text-[#D8F3DC] text-[10px] font-bold">Nicaragua</span>
+        </div>
+
+        <dl class="space-y-2 text-xs">
+          <div class="flex justify-between py-1 border-b border-[#F0EAE1]">
+            <dt class="text-[#795548]">Gemeinde / Municipio:</dt>
+            <dd class="font-bold text-[#1F1612]">Achuapa (León)</dd>
+          </div>
+          <div class="flex justify-between py-1 border-b border-[#F0EAE1]">
+            <dt class="text-[#795548]">Dorf / Comarca:</dt>
+            <dd class="font-bold text-[#1F1612]">La Perla</dd>
+          </div>
+          <div class="flex justify-between py-1 border-b border-[#F0EAE1]">
+            <dt class="text-[#795548]">Klimazone:</dt>
+            <dd class="font-bold text-[#1F1612]">Corredor Seco (Trockenwald)</dd>
+          </div>
+          <div class="flex justify-between py-1 border-b border-[#F0EAE1]">
+            <dt class="text-[#795548]">Partnerschule:</dt>
+            <dd class="font-bold text-[#1F1612]">Escuela Rural La Perla</dd>
+          </div>
+          <div class="flex justify-between py-1 border-b border-[#F0EAE1]">
+            <dt class="text-[#795548]">Baumarten:</dt>
+            <dd class="font-bold text-[#1F1612]">Madroño, Cedro, Guazuma</dd>
+          </div>
+          <div class="flex justify-between py-1">
+            <dt class="text-[#795548]">Wirkungsprinzip:</dt>
+            <dd class="font-bold text-[#2D6A4F]">100% Direkt vor Ort</dd>
+          </div>
+        </dl>
+
+        <div class="p-3 bg-[#EDF9F0] rounded-xl text-[11px] text-[#1B4332] font-semibold flex items-center gap-2">
+          <span class="mat-icon text-base">verified_user</span>
+          <span>Transparenz: Jede Baumpflanzung und Schulhilfe wird mit Fotos und Koordinaten dokumentiert.</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. INTERACTIVE CO2- UND IMPACT-RECHNER: Berechne deinen Beitrag -->
+  <section class="bg-gradient-to-b from-white to-[#FAF7F2] border-2 border-[#2D6A4F]/30 rounded-3xl p-6 sm:p-9 shadow-md space-y-6">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#E6DED6] pb-4">
+      <div class="flex items-center gap-3">
+        <span class="w-10 h-10 rounded-xl bg-[#1B4332] text-white flex items-center justify-center font-black">
+          <span class="mat-icon text-2xl text-[#74C69D]">calculate</span>
+        </span>
+        <div>
+          <span class="text-xs font-bold uppercase tracking-wider text-[#2D6A4F]">Interaktiver Simulator</span>
+          <h2 class="text-xl sm:text-2xl font-black text-[#1F1612]">
+            Dein CO₂-Ersparnis- & Aufforstungsrechner
+          </h2>
+        </div>
+      </div>
+      <span class="text-xs font-bold text-[#1B4332] bg-[#D8F3DC] px-3 py-1 rounded-full self-start sm:self-auto">
+        Live-Kalkulation
+      </span>
+    </div>
+
+    <!-- Controls Form -->
+    <div class="space-y-4">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <label for="input-annual-km" class="text-xs sm:text-sm font-bold text-[#1F1612] flex items-center gap-1.5">
+          <span class="mat-icon text-base text-[#2D6A4F]">route</span>
+          Deine jährlichen Reise-Kilometer mit dem Nahverkehr / D-Ticket:
+        </label>
+        <div class="flex items-center gap-2">
+          <input
+            id="input-annual-km"
+            type="number"
+            min="0"
+            max="100000"
+            step="100"
+            [formControl]="kmControl"
+            class="w-28 sm:w-32 px-3 py-1.5 rounded-xl border-2 border-[#2D6A4F] bg-white font-mono font-black text-sm text-[#1B4332] text-right focus:outline-none focus:ring-2 focus:ring-[#74C69D]"
+          />
+          <span class="text-xs font-bold text-[#795548]">km / Jahr</span>
+        </div>
+      </div>
+
+      <!-- Slider Control -->
+      <div>
+        <input
+          type="range"
+          min="500"
+          max="35000"
+          step="250"
+          [formControl]="kmControl"
+          class="w-full h-2.5 bg-[#E6DED6] rounded-lg appearance-none cursor-pointer accent-[#1B4332]"
+          aria-label="Schieberegler für jährliche Bahnkilometer"
+        />
+        <div class="flex justify-between text-[11px] text-[#8D6E63] font-mono mt-1">
+          <span>500 km</span>
+          <span>10.000 km</span>
+          <span>20.000 km</span>
+          <span>35.000 km</span>
+        </div>
+      </div>
+
+      <!-- Quick Presets -->
+      <div class="flex flex-wrap items-center gap-2 pt-1">
+        <span class="text-xs font-bold text-[#795548] mr-1">Schnellwahl:</span>
+        @for (p of presets; track p.km) {
+          <button
+            type="button"
+            (click)="setPreset(p.km)"
+            [class.bg-[#1B4332]]="kmControl.value === p.km"
+            [class.text-white]="kmControl.value === p.km"
+            [class.bg-white]="kmControl.value !== p.km"
+            [class.text-[#4E342E]]="kmControl.value !== p.km"
+            [class.border-[#1B4332]]="kmControl.value === p.km"
+            [class.border-[#E6DED6]]="kmControl.value !== p.km"
+            class="px-2.5 py-1 rounded-lg text-xs font-semibold border hover:border-[#2D6A4F] cursor-pointer transition-all"
+          >
+            {{ p.label }} ({{ p.km }} km)
+          </button>
+        }
+      </div>
+    </div>
+
+    <!-- Live Results Bento Cards -->
+    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5 pt-2">
+      <!-- 1. CO2 vs Plane -->
+      <div class="bg-white border border-[#E6DED6] rounded-2xl p-3.5 flex flex-col justify-between shadow-2xs">
+        <div class="text-[11px] font-bold text-[#795548] flex items-center gap-1">
+          <span class="mat-icon text-sm text-[#B71C1C]">flight_takeoff</span>
+          Vs. Flugzeug
+        </div>
+        <div class="my-2">
+          <div class="text-xl sm:text-2xl font-black text-[#1B4332] font-mono">
+            {{ metrics().co2SavedVsPlaneKg }}
+          </div>
+          <div class="text-[10px] font-bold text-[#2D6A4F] uppercase">kg CO₂ vermieden</div>
+        </div>
+        <div class="text-[10px] text-[#8D6E63]">Gegenüber Kurzstreckenflug</div>
+      </div>
+
+      <!-- 2. CO2 vs Car -->
+      <div class="bg-white border border-[#E6DED6] rounded-2xl p-3.5 flex flex-col justify-between shadow-2xs">
+        <div class="text-[11px] font-bold text-[#795548] flex items-center gap-1">
+          <span class="mat-icon text-sm text-[#D4A373]">directions_car</span>
+          Vs. Pkw (Solo)
+        </div>
+        <div class="my-2">
+          <div class="text-xl sm:text-2xl font-black text-[#1B4332] font-mono">
+            {{ metrics().co2SavedVsCarKg }}
+          </div>
+          <div class="text-[10px] font-bold text-[#2D6A4F] uppercase">kg CO₂ vermieden</div>
+        </div>
+        <div class="text-[10px] text-[#8D6E63]">Gegenüber Alleinfahrer-Pkw</div>
+      </div>
+
+      <!-- 3. Monetary Value -->
+      <div class="bg-[#EDF9F0] border border-[#B7E4C7] rounded-2xl p-3.5 flex flex-col justify-between shadow-2xs">
+        <div class="text-[11px] font-bold text-[#1B4332] flex items-center gap-1">
+          <span class="mat-icon text-sm text-[#2D6A4F]">payments</span>
+          Klima-Prämie
+        </div>
+        <div class="my-2">
+          <div class="text-xl sm:text-2xl font-black text-[#1B4332] font-mono">
+            {{ metrics().monetaryValueEuro }} €
+          </div>
+          <div class="text-[10px] font-bold text-[#2D6A4F] uppercase">Kompensationswert</div>
+        </div>
+        <div class="text-[10px] text-[#2D6A4F]">Nach EU-ETS Emissionssatz</div>
+      </div>
+
+      <!-- 4. Trees Planted -->
+      <div class="bg-white border border-[#E6DED6] rounded-2xl p-3.5 flex flex-col justify-between shadow-2xs">
+        <div class="text-[11px] font-bold text-[#795548] flex items-center gap-1">
+          <span class="mat-icon text-sm text-[#2D6A4F]">forest</span>
+          Aufforstung
+        </div>
+        <div class="my-2">
+          <div class="text-xl sm:text-2xl font-black text-[#1B4332] font-mono">
+            {{ metrics().treesPlanted }}
+          </div>
+          <div class="text-[10px] font-bold text-[#2D6A4F] uppercase">Bäume in La Perla</div>
+        </div>
+        <div class="text-[10px] text-[#8D6E63]">Madroño & Edelhölzer</div>
+      </div>
+
+      <!-- 5. School Months -->
+      <div class="bg-white border border-[#E6DED6] rounded-2xl p-3.5 flex flex-col justify-between shadow-2xs">
+        <div class="text-[11px] font-bold text-[#795548] flex items-center gap-1">
+          <span class="mat-icon text-sm text-[#B71C1C]">school</span>
+          Bildung
+        </div>
+        <div class="my-2">
+          <div class="text-xl sm:text-2xl font-black text-[#1B4332] font-mono">
+            {{ metrics().schoolMonthsFunded }}
+          </div>
+          <div class="text-[10px] font-bold text-[#2D6A4F] uppercase">Schulmonate finanziert</div>
+        </div>
+        <div class="text-[10px] text-[#8D6E63]">Materialien & Bücher</div>
+      </div>
+
+      <!-- 6. Water Days -->
+      <div class="bg-white border border-[#E6DED6] rounded-2xl p-3.5 flex flex-col justify-between shadow-2xs">
+        <div class="text-[11px] font-bold text-[#795548] flex items-center gap-1">
+          <span class="mat-icon text-sm text-[#0288D1]">water_drop</span>
+          Trinkwasser
+        </div>
+        <div class="my-2">
+          <div class="text-xl sm:text-2xl font-black text-[#1B4332] font-mono">
+            {{ metrics().waterCleanDays }}
+          </div>
+          <div class="text-[10px] font-bold text-[#0288D1] uppercase">Tage sauberes Wasser</div>
+        </div>
+        <div class="text-[10px] text-[#8D6E63]">Brunnen & Filter an Schule</div>
+      </div>
+    </div>
+
+    <!-- Interactive Certificate Preview Box -->
+    <div class="p-5 sm:p-6 bg-white border border-[#B7E4C7] rounded-2xl shadow-xs space-y-4">
+      <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-[#F0EAE1] pb-3">
+        <div class="flex items-center gap-2">
+          <span class="mat-icon text-2xl text-[#2D6A4F]">military_tech</span>
+          <div>
+            <h4 class="font-black text-sm text-[#1F1612]">Persönliches Klimazertifikat La Perla</h4>
+            <p class="text-xs text-[#795548]">Nachweis über vermiedene Emissionen und Partnerschaftshilfe</p>
+          </div>
+        </div>
+        <div class="w-full sm:w-auto flex items-center gap-2">
+          <label for="input-cert-name" class="text-xs font-bold text-[#795548] whitespace-nowrap">Name:</label>
+          <input
+            id="input-cert-name"
+            type="text"
+            [formControl]="userNameControl"
+            class="flex-1 sm:w-60 px-3 py-1 text-xs border border-[#E6DED6] rounded-lg font-medium text-[#1F1612] bg-[#FAF7F2] focus:bg-white"
+            placeholder="Dein Name"
+          />
+        </div>
+      </div>
+
+      <div class="bg-[#FAF7F2] p-4 sm:p-5 rounded-xl border border-[#E6DED6] text-center space-y-2 relative overflow-hidden">
+        <div class="text-[10px] uppercase font-black tracking-widest text-[#2D6A4F]">
+          Anerkennung für aktiven Klimaschutz & Solidarität
+        </div>
+        <div class="text-base sm:text-xl font-extrabold text-[#1B4332]">
+          Hiermit wird bestätigt: {{ userNameControl.value }}
+        </div>
+        <p class="text-xs text-[#5D4037] max-w-2xl mx-auto leading-relaxed">
+          hat durch die Nutzung umweltfreundlicher Regionalzüge mit einer Jahresstrecke von <strong>{{ metrics().annualKm }} km</strong> insgesamt <strong>{{ metrics().co2SavedVsPlaneKg }} kg CO₂</strong> vermieden. Dieser Beitrag ermöglicht das Pflanzen von <strong>{{ metrics().treesPlanted }} heimischen Bäumen</strong> und sichert Schulbildung und Trinkwasser für Kinder der Gemeinde <em>La Perla bei Achuapa, Nicaragua</em>.
+        </p>
+        <div class="pt-2 flex flex-wrap items-center justify-center gap-3 text-[11px] font-bold text-[#1B4332]">
+          <span class="inline-flex items-center gap-1 bg-[#D8F3DC] px-2.5 py-1 rounded-md">
+            <span class="mat-icon text-xs">eco</span>
+            {{ metrics().treesPlanted }} Bäume La Perla
+          </span>
+          <span class="inline-flex items-center gap-1 bg-[#D8F3DC] px-2.5 py-1 rounded-md">
+            <span class="mat-icon text-xs">school</span>
+            {{ metrics().schoolMonthsFunded }} Monate Schule
+          </span>
+          <span class="inline-flex items-center gap-1 bg-[#D8F3DC] px-2.5 py-1 rounded-md">
+            <span class="mat-icon text-xs">euro</span>
+            {{ metrics().monetaryValueEuro }} € Klimawert
+          </span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6. FREQUENTLY ASKED QUESTIONS & TRANSPARENCY (FAQ) -->
+  <section class="bg-white border border-[#E6DED6] rounded-3xl p-6 sm:p-9 shadow-sm space-y-6">
+    <div class="flex items-center gap-3">
+      <span class="w-10 h-10 rounded-xl bg-[#EDF9F0] text-[#1B4332] flex items-center justify-center font-black">
+        <span class="mat-icon text-2xl">help_outline</span>
+      </span>
+      <div>
+        <span class="text-xs font-bold uppercase tracking-wider text-[#2D6A4F]">Transparenz & Fakten</span>
+        <h2 class="text-xl sm:text-2xl font-black text-[#1F1612]">
+          Häufig gestellte Fragen (FAQ)
+        </h2>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="p-4 bg-[#FAF7F2] rounded-2xl border border-[#E6DED6] space-y-2">
+        <h3 class="font-bold text-sm text-[#1F1612] flex items-center gap-2">
+          <span class="mat-icon text-base text-[#2D6A4F]">paid</span>
+          Woher stammt das Geld für die Prämie?
+        </h3>
+        <p class="text-xs text-[#5D4037] leading-relaxed">
+          Strikte Umweltgesetze verpflichten Fluglinien und Großverschmutzer zur Zahlung von CO₂-Abgaben. Wir bündeln die vermiedenen Emissionen unserer Bahnnutzer und refinanzieren diese über bestehende Klimaschutz- und Kompensationsbudgets. Die Verursacher zahlen – die Vermeider und der Wald profitieren.
+        </p>
+      </div>
+
+      <div class="p-4 bg-[#FAF7F2] rounded-2xl border border-[#E6DED6] space-y-2">
+        <h3 class="font-bold text-sm text-[#1F1612] flex items-center gap-2">
+          <span class="mat-icon text-base text-[#2D6A4F]">location_on</span>
+          Warum gerade La Perla bei Achuapa in Nicaragua?
+        </h3>
+        <p class="text-xs text-[#5D4037] leading-relaxed">
+          Nicaraguas Trockenkorridor leidet akut unter Dürren. La Perla ist eine eng verbundene kleinbäuerliche Gemeinde, in der Hilfe ohne Umwege und ohne teuren Verwaltungsapparat zu 100% bei den Familien und den Schulkindern ankommt.
+        </p>
+      </div>
+
+      <div class="p-4 bg-[#FAF7F2] rounded-2xl border border-[#E6DED6] space-y-2">
+        <h3 class="font-bold text-sm text-[#1F1612] flex items-center gap-2">
+          <span class="mat-icon text-base text-[#2D6A4F]">checklist</span>
+          Wie wird sichergestellt, dass die Bäume wachsen?
+        </h3>
+        <p class="text-xs text-[#5D4037] leading-relaxed">
+          Die Bäume werden nicht nur gepflanzt, sondern über 3 Jahre hinweg durch die Kleinbauernfamilien gepflegt, bewässert und vor Weidevieh geschützt. Jedes Pflanzgebiet wird mit GPS-Koordinaten und Bildnachweisen erfasst.
+        </p>
+      </div>
+
+      <div class="p-4 bg-[#FAF7F2] rounded-2xl border border-[#E6DED6] space-y-2">
+        <h3 class="font-bold text-sm text-[#1F1612] flex items-center gap-2">
+          <span class="mat-icon text-base text-[#2D6A4F]">train</span>
+          Wie kann ich sofort mitmachen?
+        </h3>
+        <p class="text-xs text-[#5D4037] leading-relaxed">
+          Indem du deine täglichen Fahrten und Ausflüge mit dem Deutschlandticket und Regionalzügen unternimmst! Jeder gefahrene Kilometer ersetzt potenziell umweltschädliche Autofahrten und Kurzstreckenflüge.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7. CALL TO ACTION: Starte deine nächste Reise -->
+  <section class="bg-gradient-to-r from-[#1B4332] to-[#2D6A4F] text-white rounded-3xl p-6 sm:p-8 flex flex-col sm:flex-row items-center justify-between gap-6 shadow-md">
+    <div class="space-y-1.5 text-center sm:text-left">
+      <div class="inline-flex items-center gap-1.5 text-xs font-bold text-[#B7E4C7]">
+        <span class="mat-icon text-sm">rocket_launch</span>
+        Jede Fahrt zählt für das Klima
+      </div>
+      <h3 class="text-xl sm:text-2xl font-black">
+        Bereit für deine nächste grüne Schienenreise?
+      </h3>
+      <p class="text-xs sm:text-sm text-[#E8F5E9] max-w-xl">
+        Plane jetzt deine nächste Nahverkehrsverbindung ohne ICE-Aufpreis. Sammle echte Kilometer, spare CO₂ und hilf den Kindern in La Perla!
+      </p>
+    </div>
+
+    <button
+      type="button"
+      id="btn-about-plan-now"
+      (click)="startPlanning()"
+      class="px-5 py-3 rounded-xl bg-white text-[#1B4332] font-black text-sm hover:bg-[#D8F3DC] transition-all shadow-md flex items-center gap-2 cursor-pointer whitespace-nowrap active:scale-95 shrink-0"
+    >
+      <span class="mat-icon text-lg text-[#2D6A4F]">search</span>
+      <span>Jetzt Verbindung suchen</span>
+    </button>
+  </section>
+
+  <!-- LIGHTBOX PHOTO MODAL -->
+  @if (activePhotoModal()) {
+    <div
+      class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-photo-title"
+    >
+      <!-- Click outside to dismiss -->
+      <button
+        type="button"
+        class="fixed inset-0 w-full h-full cursor-default bg-transparent border-0 p-0"
+        aria-label="Modal schließen"
+        (click)="closePhotoModal()"
+      ></button>
+
+      <div class="relative z-10 max-w-3xl w-full bg-white rounded-2xl overflow-hidden shadow-2xl border border-[#E6DED6] animate-in zoom-in-95 duration-200 flex flex-col">
+        <!-- Close button -->
+        <button
+          type="button"
+          (click)="closePhotoModal()"
+          class="absolute top-3 right-3 z-20 w-9 h-9 rounded-full bg-black/60 hover:bg-black text-white flex items-center justify-center transition-all cursor-pointer"
+          aria-label="Schließen"
+        >
+          <span class="mat-icon text-lg">close</span>
+        </button>
+
+        <div class="relative aspect-video w-full bg-black">
+          <img
+            [src]="activePhotoModal()?.src"
+            [alt]="activePhotoModal()?.title"
+            referrerpolicy="no-referrer"
+            class="w-full h-full object-cover"
+          />
+        </div>
+
+        <div class="p-6 space-y-2 bg-white">
+          <div class="text-[11px] font-bold text-[#2D6A4F] uppercase tracking-wider">
+            {{ activePhotoModal()?.subtitle }}
+          </div>
+          <h3 id="modal-photo-title" class="text-xl font-black text-[#1F1612]">
+            {{ activePhotoModal()?.title }}
+          </h3>
+          <p class="text-xs sm:text-sm text-[#5D4037] leading-relaxed">
+            {{ activePhotoModal()?.description }}
+          </p>
+        </div>
+      </div>
+    </div>
+  }
+
+</div>

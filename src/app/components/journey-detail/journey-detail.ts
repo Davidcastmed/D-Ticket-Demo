@@ -26,6 +26,7 @@ import {
 import { TransitService } from '../../services/transit.service';
 import { WeatherService } from '../../services/weather.service';
 import { MapView } from '../map/map-view';
+import { Co2BalanceBadge } from '../co2-balance-badge/co2-balance-badge';
 
 export type StationStatus = 'passed' | 'current' | 'upcoming';
 
@@ -48,7 +49,7 @@ export interface LegModeBadge {
 
 @Component({
   selector: 'app-journey-detail',
-  imports: [CommonModule, MapView],
+  imports: [CommonModule, MapView, Co2BalanceBadge],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './journey-detail.html',
 })
@@ -631,6 +632,13 @@ export class JourneyDetail implements OnInit, OnDestroy, AfterViewInit, OnChange
       return `Steige um (${walkMin} min zu Fuß, ${waitMin} min warten)`;
     }
     return `Steige um (${walkMin} min zu Fuß)`;
+  }
+
+  getTransferDetail(journey: ConnectionJourney, index: number) {
+    if (journey.transferDetails && journey.transferDetails[index]) {
+      return journey.transferDetails[index];
+    }
+    return null;
   }
 
   toggleMap(): void {

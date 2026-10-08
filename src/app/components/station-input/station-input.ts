@@ -84,12 +84,19 @@ export interface EnrichedStationItem extends Station {
       <div class="relative flex items-center">
         @if (iconName && !showLabel) {
           <span
-            class="absolute left-3.5 flex items-center pointer-events-none z-10 transition-colors"
-            [class.text-[#2D6A4F]]="selectedStation()?.isCurrentLocation"
-            [class.text-[#795548]]="!selectedStation()?.isCurrentLocation"
+            class="absolute flex items-center pointer-events-none z-10 transition-colors"
+            [class.left-3.5]="variant !== 'hero'"
+            [class.left-3]="variant === 'hero'"
+            [class.text-[#2D6A4F]]="selectedStation()?.isCurrentLocation || (!selectedStation()?.isCurrentLocation && iconName === 'directions_railway')"
+            [class.text-[#1F1612]]="!selectedStation()?.isCurrentLocation && iconName !== 'directions_railway'"
             aria-hidden="true"
           >
-            <span class="mat-icon text-base">{{ selectedStation()?.isCurrentLocation ? 'my_location' : iconName }}</span>
+            <span
+              class="mat-icon select-none"
+              [class.text-base]="variant !== 'hero'"
+              [class.text-2xl]="variant === 'hero'"
+              [class.sm:text-3xl]="variant === 'hero'"
+            >{{ selectedStation()?.isCurrentLocation ? 'my_location' : iconName }}</span>
           </span>
         }
         <input
@@ -106,7 +113,9 @@ export interface EnrichedStationItem extends Station {
           (focus)="onInputFocus()"
           (keydown)="onKeyDown($event)"
           autocomplete="off"
-          [class.pl-10]="iconName && !showLabel"
+          [class.pl-10]="iconName && !showLabel && variant !== 'hero'"
+          [class.pl-12]="iconName && !showLabel && variant === 'hero'"
+          [class.sm:pl-14]="iconName && !showLabel && variant === 'hero'"
           [class.pl-2]="(!iconName || showLabel) && variant === 'flush'"
           [class.pl-3.5]="(!iconName || showLabel) && variant !== 'flush'"
           [class.bg-white]="variant === 'standard' && isCursorActive"
@@ -119,29 +128,38 @@ export interface EnrichedStationItem extends Station {
           [class.border]="variant === 'standard'"
           [class.shadow-xs]="variant === 'standard'"
           [class.py-3]="variant === 'standard'"
-          [class.bg-transparent]="variant === 'flush'"
-          [class.border-0]="variant === 'flush'"
-          [class.rounded-none]="variant === 'flush'"
-          [class.shadow-none]="variant === 'flush'"
+          [class.bg-transparent]="variant === 'flush' || variant === 'hero'"
+          [class.border-0]="variant === 'flush' || variant === 'hero'"
+          [class.rounded-none]="variant === 'flush' || variant === 'hero'"
+          [class.shadow-none]="variant === 'flush' || variant === 'hero'"
           [class.py-2.5]="variant === 'flush'"
           [class.sm:py-3]="variant === 'flush'"
-          class="w-full pr-10 text-[#2E1F18] placeholder-[#8D6E63] text-sm font-semibold focus:outline-none transition-all"
+          [class.py-3.5]="variant === 'hero'"
+          [class.sm:py-4]="variant === 'hero'"
+          [class.text-lg]="variant === 'hero'"
+          [class.sm:text-xl]="variant === 'hero'"
+          [class.md:text-2xl]="variant === 'hero'"
+          [class.font-extrabold]="variant === 'hero'"
+          [class.tracking-tight]="variant === 'hero'"
+          [class.text-sm]="variant !== 'hero'"
+          [class.font-semibold]="variant !== 'hero'"
+          class="w-full pr-11 text-[#1F1612] placeholder-[#8D6E63]/70 focus:outline-none transition-all"
         />
 
-        <div class="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1 z-10">
+        <div class="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 z-10">
           @if (isSearching()) {
-            <span class="mat-icon animate-spin text-sm text-[#2D6A4F] mr-0.5" title="Stationen werden gesucht..." aria-hidden="true">sync</span>
+            <span class="mat-icon animate-spin text-lg text-[#2D6A4F] mr-1" title="Stationen werden gesucht..." aria-hidden="true">sync</span>
           }
 
           @if (searchQuery()) {
             <button
               type="button"
               (click)="clearStation($event)"
-              class="w-6 h-6 rounded-full flex items-center justify-center text-[#8D6E63] hover:text-[#2E1F18] hover:bg-[#E6DED6] active:bg-[#D7CCC8] transition-colors cursor-pointer"
+              class="w-8 h-8 rounded-full flex items-center justify-center text-[#8D6E63] hover:text-[#1F1612] hover:bg-[#E6DED6] active:bg-[#D7CCC8] transition-colors cursor-pointer"
               title="Eingabe löschen"
               [attr.aria-label]="'Eingabe für ' + (label || 'Bahnhof') + ' löschen'"
             >
-              <span class="mat-icon text-sm leading-none" aria-hidden="true">close</span>
+              <span class="mat-icon text-lg leading-none" aria-hidden="true">close</span>
             </button>
           }
         </div>
@@ -236,7 +254,7 @@ export interface EnrichedStationItem extends Station {
   `
 })
 export class StationInput {
-  @Input() variant: 'standard' | 'flush' = 'standard';
+  @Input() variant: 'standard' | 'flush' | 'hero' = 'standard';
   @Input() label = 'Bahnhof';
   @Input() showLabel = true;
   @Input() placeholder = 'Stadt oder Bahnhof suchen...';
@@ -683,7 +701,8 @@ export class StationInput {
     } else {
       const name = station.name.toLowerCase();
       if (name.includes('hamburg')) parts.push('Hamburg • HVV / DB');
-      else if (name.includes('horst') || name.includes('dauenhof') || name.includes('wrist') || name.includes('elmshorn') || name.includes('pinneberg')) parts.push('Schleswig-Holstein • RB 61 / RE 70');
+      else if (name.includes('horst') || name.includes('dauenhof') || name.includes('wrist')) parts.push('Schleswig-Holstein • RB 71 (nordbahn)');
+      else if (name.includes('elmshorn') || name.includes('pinneberg') || name.includes('tornesch')) parts.push('Schleswig-Holstein • RB 71 / RB 61 / RE 70');
       else if (name.includes('konstanz') || name.includes('singen') || name.includes('radolfzell')) parts.push('Bodensee / Baden-Württemberg • bwegt / Seehas');
       else if (name.includes('kiel') || name.includes('lübeck') || name.includes('flensburg') || name.includes('sylt')) parts.push('Schleswig-Holstein • NAH.SH');
       else if (name.includes('bremen') || name.includes('hannover') || name.includes('lüneburg')) parts.push('Niedersachsen / Bremen');

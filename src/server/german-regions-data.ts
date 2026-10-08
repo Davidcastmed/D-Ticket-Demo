@@ -19,7 +19,7 @@ export interface RegionalDestination {
 
 export const TOP_GERMAN_STATIONS = [
   // Hamburg City & Metropolregion - Main Railway & S-Bahn Interchanges
-  { id: '8002549', name: 'Hauptbahnhof', latitude: 53.552736, longitude: 10.006909, weight: 100 },
+  { id: '8002549', name: 'Hamburg Hbf', latitude: 53.552736, longitude: 10.006909, weight: 100 },
   { id: '8002548', name: 'Dammtor', latitude: 53.560751, longitude: 9.989566, weight: 95 },
   { id: '8002553', name: 'Altona', latitude: 53.552682, longitude: 9.935177, weight: 92 },
   { id: '8002551', name: 'Harburg', latitude: 53.456184, longitude: 9.991669, weight: 90 },
@@ -210,8 +210,14 @@ export const TOP_GERMAN_STATIONS = [
   { id: '8001222', name: 'Brokstedt', latitude: 53.9961, longitude: 9.8182, weight: 72 },
   { id: '8000276', name: 'Neumünster', latitude: 54.074742, longitude: 9.979373, weight: 82 },
   { id: '8001140', name: 'Bordesholm', latitude: 54.1795, longitude: 10.0125, weight: 72 },
-  { id: '8003368', name: 'Hbf', latitude: 54.314983, longitude: 10.132022, weight: 88 },
-  { id: '8000208', name: 'Hassee CITTI-PARK', latitude: 54.301542, longitude: 10.106511, weight: 70 },
+  { id: '8003368', name: 'Kiel Hbf', latitude: 54.314983, longitude: 10.132022, weight: 92 },
+  { id: '8000208', name: 'Hassee CITTI-PARK', latitude: 54.301542, longitude: 10.106511, weight: 75 },
+  { id: '8003369', name: 'Oppendorf', latitude: 54.3278, longitude: 10.2105, weight: 72 },
+  { id: '8003370', name: 'Ellerbek', latitude: 54.3228, longitude: 10.1812, weight: 70 },
+  { id: '8003371', name: 'Wellsee', latitude: 54.2882, longitude: 10.1745, weight: 70 },
+  { id: '8003372', name: 'Schulen am Langsee', latitude: 54.3195, longitude: 10.1652, weight: 70 },
+  { id: '8005798', name: 'Suchsdorf', latitude: 54.3541, longitude: 10.0815, weight: 72 },
+  { id: '8003373', name: 'Elmschenhagen', latitude: 54.3012, longitude: 10.1895, weight: 72 },
   { id: '8005118', name: 'Rendsburg', latitude: 54.307221, longitude: 9.664426, weight: 78 },
   { id: '8005390', name: 'Schleswig', latitude: 54.5015, longitude: 9.5390, weight: 78 },
   { id: '8002042', name: 'Flensburg', latitude: 54.774088, longitude: 9.436329, weight: 80 },
@@ -358,7 +364,7 @@ export const REGIONAL_DESTINATIONS_FROM_HAMBURG: RegionalDestination[] = [
   {
     id: 'sh-kiel',
     name: 'Kiel',
-    stationName: 'Hbf',
+    stationName: 'Kiel Hbf',
     stationId: '8003368',
     bundesland: 'Schleswig-Holstein',
     description: 'Landeshauptstadt an der Kieler Förde mit regem Schiffsverkehr, Stränden und maritimer Promenade.',

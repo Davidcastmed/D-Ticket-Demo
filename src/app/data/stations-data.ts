@@ -8,7 +8,7 @@ export interface StationData extends Station {
 
 export const ALL_GERMAN_STATIONS: StationData[] = [
   // Hamburg & Metropolregion - Main Railway & S-Bahn Interchanges
-  { id: '8002549', name: 'Hauptbahnhof', location: { latitude: 53.552736, longitude: 10.006909 }, bundesland: 'Hamburg', region: 'Norddeutschland', isMajorHub: true, weight: 100 },
+  { id: '8002549', name: 'Hamburg Hbf', location: { latitude: 53.552736, longitude: 10.006909 }, bundesland: 'Hamburg', region: 'Norddeutschland', isMajorHub: true, weight: 100 },
   { id: '8002548', name: 'Dammtor', location: { latitude: 53.560751, longitude: 9.989566 }, bundesland: 'Hamburg', region: 'Norddeutschland', isMajorHub: true, weight: 95 },
   { id: '8002553', name: 'Altona', location: { latitude: 53.552682, longitude: 9.935177 }, bundesland: 'Hamburg', region: 'Norddeutschland', isMajorHub: true, weight: 92 },
   { id: '8002551', name: 'Harburg', location: { latitude: 53.456184, longitude: 9.991669 }, bundesland: 'Hamburg', region: 'Norddeutschland', isMajorHub: true, weight: 90 },
@@ -199,8 +199,14 @@ export const ALL_GERMAN_STATIONS: StationData[] = [
   { id: '8001222', name: 'Brokstedt', location: { latitude: 53.9961, longitude: 9.8182 }, bundesland: 'Schleswig-Holstein', region: 'Kreis Steinburg', weight: 72 },
   { id: '8000276', name: 'Neumünster', location: { latitude: 54.074742, longitude: 9.979373 }, bundesland: 'Schleswig-Holstein', region: 'Zentralschleswig', isMajorHub: true, weight: 86 },
   { id: '8001140', name: 'Bordesholm', location: { latitude: 54.1795, longitude: 10.0125 }, bundesland: 'Schleswig-Holstein', region: 'Kreis Rendsburg-Eckernförde', weight: 72 },
-  { id: '8003368', name: 'Hbf', location: { latitude: 54.314983, longitude: 10.132022 }, bundesland: 'Schleswig-Holstein', region: 'Ostseeküste', isMajorHub: true, weight: 90 },
-  { id: '8000208', name: 'Hassee CITTI-PARK', location: { latitude: 54.301542, longitude: 10.106511 }, bundesland: 'Schleswig-Holstein', region: 'Kiel', weight: 70 },
+  { id: '8003368', name: 'Kiel Hbf', location: { latitude: 54.314983, longitude: 10.132022 }, bundesland: 'Schleswig-Holstein', region: 'Kiel / Ostseeküste', isMajorHub: true, weight: 92 },
+  { id: '8000208', name: 'Hassee CITTI-PARK', location: { latitude: 54.301542, longitude: 10.106511 }, bundesland: 'Schleswig-Holstein', region: 'Kiel', weight: 75 },
+  { id: '8003369', name: 'Oppendorf', location: { latitude: 54.3278, longitude: 10.2105 }, bundesland: 'Schleswig-Holstein', region: 'Kiel', weight: 72 },
+  { id: '8003370', name: 'Ellerbek', location: { latitude: 54.3228, longitude: 10.1812 }, bundesland: 'Schleswig-Holstein', region: 'Kiel', weight: 70 },
+  { id: '8003371', name: 'Wellsee', location: { latitude: 54.2882, longitude: 10.1745 }, bundesland: 'Schleswig-Holstein', region: 'Kiel', weight: 70 },
+  { id: '8003372', name: 'Schulen am Langsee', location: { latitude: 54.3195, longitude: 10.1652 }, bundesland: 'Schleswig-Holstein', region: 'Kiel', weight: 70 },
+  { id: '8005798', name: 'Suchsdorf', location: { latitude: 54.3541, longitude: 10.0815 }, bundesland: 'Schleswig-Holstein', region: 'Kiel', weight: 72 },
+  { id: '8003373', name: 'Elmschenhagen', location: { latitude: 54.3012, longitude: 10.1895 }, bundesland: 'Schleswig-Holstein', region: 'Kiel', weight: 72 },
   { id: '8005118', name: 'Rendsburg', location: { latitude: 54.307221, longitude: 9.664426 }, bundesland: 'Schleswig-Holstein', region: 'Nord-Ostsee-Kanal', weight: 80 },
   { id: '8005390', name: 'Schleswig', location: { latitude: 54.5015, longitude: 9.5390 }, bundesland: 'Schleswig-Holstein', region: 'Schlei', weight: 78 },
   { id: '8002042', name: 'Flensburg', location: { latitude: 54.774088, longitude: 9.436329 }, bundesland: 'Schleswig-Holstein', region: 'Flensburger Förde', isMajorHub: true, weight: 84 },
@@ -208,7 +214,10 @@ export const ALL_GERMAN_STATIONS: StationData[] = [
 
   // Westküste Schleswig-Holstein / Nordsee
   { id: '8003058', name: 'Itzehoe', location: { latitude: 53.9264, longitude: 9.5103 }, bundesland: 'Schleswig-Holstein', region: 'Kreis Steinburg', isMajorHub: true, weight: 82 },
+  { id: '8003425', name: 'Kremperheide', location: { latitude: 53.8821, longitude: 9.4795 }, bundesland: 'Schleswig-Holstein', region: 'Kreis Steinburg', weight: 68 },
+  { id: '8003424', name: 'Krempe', location: { latitude: 53.8373, longitude: 9.4975 }, bundesland: 'Schleswig-Holstein', region: 'Kreis Steinburg', weight: 70 },
   { id: '8002302', name: 'Glückstadt', location: { latitude: 53.7915, longitude: 9.4245 }, bundesland: 'Schleswig-Holstein', region: 'Unterelbe', weight: 76 },
+  { id: '8002875', name: 'Herzhorn', location: { latitude: 53.7885, longitude: 9.5020 }, bundesland: 'Schleswig-Holstein', region: 'Kreis Steinburg', weight: 68 },
   { id: '8002824', name: 'Heide (Holst)', location: { latitude: 54.1975, longitude: 9.1025 }, bundesland: 'Schleswig-Holstein', region: 'Dithmarschen', weight: 80 },
   { id: '8001108', name: 'Büsum', location: { latitude: 54.136154, longitude: 8.865363 }, bundesland: 'Schleswig-Holstein', region: 'Nordseeküste / Watt', weight: 80 },
   { id: '8002778', name: 'Husum', location: { latitude: 54.475152, longitude: 9.055819 }, bundesland: 'Schleswig-Holstein', region: 'Nordfriesland', weight: 82 },
